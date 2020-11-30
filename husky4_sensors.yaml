@@ -1,0 +1,136 @@
+realsense:
+  name: camera_front
+  parent: base_link
+  position:
+    x: 0.4917
+    y: 0
+    z: 0.26283
+  orientation:
+    r: 0
+    p: 0
+    y: 0
+  rate: 10
+realsense_left:
+  name: camera_left
+  parent: base_link
+  position:
+    x: -0.0057
+    y: 0.3113
+    z: 0.26283
+  orientation:
+    r: 0
+    p: 0
+    y: 1.57079632679
+  rate: 10
+realsense_right:
+  name: camera_right
+  parent: base_link
+  position:
+    x: -0.0057
+    y: -0.3113
+    z: 0.26283
+  orientation:
+    r: 0
+    p: 0
+    y: -1.57079632679
+  rate: 10
+realsense_t265_front:
+  name: camera_t265_front
+  parent: base_link
+  position:
+    x: 0.53
+    y: 0
+    z: 0.24
+  orientation:
+    r: 0.03
+    p: 0.66
+    y: 0
+  rate: 10
+realsense_t265_right:
+  name: camera_t265_right
+  parent: base_link
+  position:
+    x: 0.23
+    y: -0.3175
+    z: 0.24
+  orientation:
+    r: 0.01
+    p: 0.55
+    y: -1.57079633
+  rate: 10
+realsense_t265_left:
+  name: camera_t265_left
+  parent: base_link
+  position:
+    x: 0.23
+    y: 0.3175
+    z: 0.24
+  orientation:
+    r: -0.01
+    p: 0.55
+    y: 1.57079633
+  rate: 10
+boson:
+  name: boson
+  parent: arch
+  position:
+    x: 0.095
+    y: 0.19
+    z: 0.269
+  orientation:
+    r: 0
+    p: -0.52359877559
+    y: 0
+  rate: 20
+velodyne:
+  name: velodyne
+  parent: arch
+  position:
+    x: 0.038
+    y: 0
+    z: 0.405
+  orientation:
+    r: 0
+    p: -0.0049916
+    y: 0.7827801355
+  rate: 10
+  topic_name: velodyne_points
+velodyne_front:
+  name: velodyne_front
+  parent: arch
+  position:
+    x: 0.138
+    y: -0.01
+    z: 0.285
+  orientation:
+    r: 0.00
+    p: 0.445058959
+    y: -0.005236
+  rate: 10
+  topic_name: velodyne_front/velodyne_points
+velodyne_rear:
+  name: velodyne_rear
+  parent: arch
+  position:
+    x: -0.47
+    y: 0
+    z: 0.21
+  orientation:
+    r: 0
+    p: 0.428
+    y: 3.15555525359
+  rate: 10
+  topic_name: velodyne_rear/velodyne_points
+vn100:
+  name: vn100
+  parent: arch
+  topic_name: vn100/imu
+  position:
+    x: 0
+    y: 0.147
+    z: 0.165
+  orientation:
+    r: 0
+    p: 0
+    y: 1.57079632679
+  rate: 50
