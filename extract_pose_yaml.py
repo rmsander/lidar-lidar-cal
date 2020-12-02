@@ -3,8 +3,8 @@
 import numpy as np
 import yaml
 import os
-import math
 import pickle
+
 
 def save_transforms(f, t):
     """Function to save relative transforms to file using pickle."""
@@ -13,6 +13,7 @@ def save_transforms(f, t):
         pkl.close()
         print("Relative transforms saved to: {}".format(f))
 
+
 def load_transforms(f):
     """Function to load relative transforms from file."""
     with open(f, "rb") as pkl:
@@ -20,9 +21,8 @@ def load_transforms(f):
         pkl.close()
     return my_dict
 
-# Source: https://www.zacobria.com/universal-robots-knowledge-base-tech-support-
-# forum-hints-tips/python-code-example-of-converting-rpyeuler-angles-to-rotation-vectorangle-axis-for-universal-robots/
-def get_rotation_matrix(rpy_dict):
+
+def eul2rot(rpy_dict):
     """Function to convert from (r, p, y) to rotation matrix.
 
     Arguments:
@@ -33,35 +33,20 @@ def get_rotation_matrix(rpy_dict):
         R (np.array): A 3 x 3 rotation matrix formed by multiplying the
             yaw x pitch x roll matrices.
     """
+    theta = [rpy_dict['r'], rpy_dict['p'], rpy_dict['y']]
+    R = np.array([[np.cos(theta[1]) * np.cos(theta[2]),
+                   np.sin(theta[0]) * np.sin(theta[1]) * np.cos(
+                       theta[2]) - np.sin(theta[2]) * np.cos(theta[0]),
+                   np.sin(theta[1]) * np.cos(theta[0]) * np.cos(
+                       theta[2]) + np.sin(theta[0]) * np.sin(theta[2])],
+                  [np.sin(theta[2]) * np.cos(theta[1]),
+                   np.sin(theta[0]) * np.sin(theta[1]) * np.sin(
+                       theta[2]) + np.cos(theta[0]) * np.cos(theta[2]),
+                   np.sin(theta[1]) * np.sin(theta[2]) * np.cos(
+                       theta[0]) - np.sin(theta[0]) * np.cos(theta[2])],
+                  [-np.sin(theta[1]), np.sin(theta[0]) * np.cos(theta[1]),
+                   np.cos(theta[0]) * np.cos(theta[1])]])
 
-    # Get rpy
-    r = rpy_dict['r']
-    p = rpy_dict['p']
-    y = rpy_dict['y']
-
-    # Yaw
-    yawMatrix = np.array([
-        [math.cos(y), -math.sin(y), 0],
-        [math.sin(y), math.cos(y), 0],
-        [0, 0, 1]
-    ])
-
-    # Pitch
-    pitchMatrix = np.array([
-        [math.cos(p), 0, math.sin(p)],
-        [0, 1, 0],
-        [-math.sin(p), 0, math.cos(p)]
-    ])
-
-    # Roll
-    rollMatrix = np.array([
-        [1, 0, 0],
-        [0, math.cos(r), -math.sin(r)],
-        [0, math.sin(r), math.cos(r)]
-    ])
-
-    # Construct rotation matrix
-    R = yawMatrix * pitchMatrix * rollMatrix
     return R
 
 
@@ -94,11 +79,26 @@ def construct_pose(R, t):
             transformation from the world frame into the given frame.
     """
     R_t = np.hstack((R, t))
-    print(R_t)
     T4 = np.array([0, 0, 0, 1])
     T = np.vstack((R_t, T4))
 
     return T
+
+
+def construct_inv_pose(T):
+    """Given a pose T, constructs an inverse pose T^{-1}."""
+
+    # Get rotation matrix and translation vector
+    R = T[:3, :3]  # 3 x 3 upper block
+    t = T[:3, 3]  # 3 x 1 upper right vector
+
+    # Get inverse elements
+    R_prime = R.T  # Inverse of rotation matrix
+    t_prime = -R_prime @ t.reshape((3, 1))
+
+    # Inverse pose
+    T_inv = construct_pose(R_prime, t_prime)
+    return T_inv
 
 
 def main():
@@ -123,7 +123,7 @@ def main():
         sensor = value['name']
         translation = get_translation(value['position'])
         rpy = value['orientation']
-        rotation_matrix = get_rotation_matrix(rpy)
+        rotation_matrix = eul2rot(rpy)
         pose = construct_pose(rotation_matrix, translation)
 
         # Add items to arrays
@@ -146,10 +146,9 @@ def main():
         print("POSE: \n {} \n".format(pose))
 
     # Now, we need to find transforms relative to velodyne
-    velodyne_pose = pose_sensor_dict[
-        'velodyne']  # Pose of velodyne w.r.t. world
-    inv_velodyne_pose = np.linalg.inv(
-        velodyne_pose)  # Pose of world w.r.t. velodyne
+    velodyne_pose = pose_sensor_dict['velodyne']  # Pose of velodyne w.r.t. world
+    inv_velodyne_pose = construct_inv_pose(velodyne_pose)
+    print("INV CHECK: {}".format(velodyne_pose @ inv_velodyne_pose))
     assert (abs(np.linalg.det(inv_velodyne_pose @ velodyne_pose) - 1.0) < 1e-1)
 
     # Now we can apply transformation to the rest of the poses
@@ -160,6 +159,7 @@ def main():
         transformed_pose_sensor_dict[sensor] = transformed_pose
         print("\n SENSOR: {} \n"
               "T_{}^velodyne: \n{} \n".format(sensor, sensor, transformed_pose))
+        print("DET: {}".format(np.linalg.det(transformed_pose_sensor_dict[sensor])))
 
     # Save relative transforms to file
     out_file = os.path.join(os.getcwd(), "relative_transforms.pkl")
