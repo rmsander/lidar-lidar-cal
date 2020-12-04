@@ -1,7 +1,6 @@
 #!/usr/bin/python3
 
 import matplotlib.pyplot as plt
-# import numpy as np
 import pandas as pd
 import scipy.signal
 from scipy.spatial.transform import Rotation as R
@@ -10,7 +9,7 @@ import autograd.numpy as np
 
 from pymanopt.manifolds import Euclidean, Rotations, Product
 from pymanopt import Problem
-from pymanopt.solvers import SteepestDescent
+from pymanopt.solvers import SteepestDescent, TrustRegions
 
 
 # def cost_full(X, A, B):
@@ -26,9 +25,10 @@ def cost_full(X):
     # Estimates for rotation (R) and translation (t)
     R, t = X
 
-    #Tab = np.zeros((4, 4))
+    # Tab = np.zeros((4, 4))
     # Tab[:3, :3] = R
     # Tab[:3, 3] = t
+    # Tab[3,3] = 1
 
     # Construct 4 x 4 pose manually
     R_t = np.hstack((R, t.reshape((3, 1))))  # 3 x 4 upper block
@@ -200,8 +200,11 @@ problem = Problem(manifold=manifold, cost=cost_full)
 
 # (3) Instantiate a Pymanopt solver
 solver = SteepestDescent()
+#solver = TrustRegions()
 
 # let Pymanopt do the rest
+# To provide initial guess, do something like
+# Xopt = solver.solve(problem, x=initial_guess)
 Xopt = solver.solve(problem)
 print(Xopt)
 

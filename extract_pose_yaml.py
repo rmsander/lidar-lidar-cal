@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 """Script for finding relative pose between velodyne and the rest of the other sensors."""
 
 import numpy as np
