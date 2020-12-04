@@ -1,0 +1,9 @@
+<launch>
+
+   <arg name="path" default="/home/dakota/" />
+   <arg name="file_1" default="main_lidar_locus" />
+   <arg name="file_2" default="front_lidar_locus" />
+   <arg name="file_3" default="rear_lidar_locus" />
+   <node pkg="rosbag" type="play" name="player" output="screen" args="--clock $(arg path)$(arg file_1).bag $(arg path)$(arg file_2).bag $(arg path)$(arg file_3).bag"/>
+
+</launch>
