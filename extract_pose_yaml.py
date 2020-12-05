@@ -18,9 +18,9 @@ def save_transforms(f, t):
 def load_transforms(f):
     """Function to load relative transforms from file."""
     with open(f, "rb") as pkl:
-        my_dict = pickle.load(pkl)
+        transforms_dict = pickle.load(pkl)
         pkl.close()
-    return my_dict
+    return transforms_dict
 
 
 def eul2rot(rpy_dict):
