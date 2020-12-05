@@ -18,7 +18,44 @@
 
    <node pkg="final" type="odom_to_tf.py" name="odom_to_tf" output="screen"/>
 
+  <node name="octomap_main" pkg="octomap_server" type="octomap_server_node" ns="octo_main">
+    <param name="frame_id" value="l1_map"/>
+    <param name="filter_ground" value="false"/>
+    <param name="base_frame_id" value="arch"/>
+    <param name="resolution" value="0.2"/>
+    <param name="height_map" value="false"/>
+    <param name="color/r" value="1.0"/>
+    <param name="color/g" value="0.0"/>
+    <param name="color/b" value="0.0"/>
+    <param name="color/a" value="0.8"/>
+    <remap from="cloud_in" to="/husky4/velodyne_points" />
+  </node>
 
+  <node name="octomap_front" pkg="octomap_server" type="octomap_server_node" ns="octo_front">
+    <param name="frame_id" value="l1_map"/>
+    <param name="filter_ground" value="false"/>
+    <param name="base_frame_id" value="arch"/>
+    <param name="resolution" value="0.2"/>
+    <param name="height_map" value="false"/>
+    <param name="color/r" value="0.0"/>
+    <param name="color/g" value="0.0"/>
+    <param name="color/b" value="1.0"/>
+    <param name="color/a" value="0.8"/>
+    <remap from="cloud_in" to="/husky4/velodyne_front/velodyne_points" />
+  </node>
+
+  <node name="octomap_rear" pkg="octomap_server" type="octomap_server_node" ns="octo_rear">
+    <param name="frame_id" value="l1_map"/>
+    <param name="filter_ground" value="false"/>
+    <param name="base_frame_id" value="arch"/>
+    <param name="resolution" value="0.2"/>
+    <param name="height_map" value="false"/>
+    <param name="color/r" value="0.0"/>
+    <param name="color/g" value="1.0"/>
+    <param name="color/b" value="0.0"/>
+    <param name="color/a" value="0.8"/>
+    <remap from="cloud_in" to="/husky4/velodyne_rear/velodyne_points" />
+  </node>
 
 
 </launch>
