@@ -6,6 +6,7 @@ import yaml
 import os
 import pickle
 
+from scipy.spatial.transform import Rotation as R
 
 def save_transforms(f, t):
     """Function to save relative transforms to file using pickle."""
@@ -145,6 +146,13 @@ def main():
         print("ORIENTATIONS: {} \n".format(rpy_angle))
         print("ROTATION MATRICES: \n {} \n".format(rotation_matrix))
         print("POSE: \n {} \n".format(pose))
+
+        inverse_mat = np.linalg.inv(rotation_matrix)
+        inverse_trans = -inverse_mat @ translation
+        rotation_inv = R.from_matrix(inverse_mat)
+        inverse_quat = rotation_inv.as_quat()
+        print("INVERSE QUATERNION: {} \n".format(inverse_quat))
+        print("INVERSE TRANSLATION: {} \n".format(inverse_trans))
 
     # Now, we need to find transforms relative to velodyne
     velodyne_pose = pose_sensor_dict['velodyne']  # Pose of velodyne w.r.t. world
