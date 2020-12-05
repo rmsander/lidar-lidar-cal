@@ -22,7 +22,7 @@
     <param name="frame_id" value="l1_map"/>
     <param name="filter_ground" value="false"/>
     <param name="base_frame_id" value="arch"/>
-    <param name="resolution" value="0.2"/>
+    <param name="resolution" value="0.05"/>
     <param name="height_map" value="false"/>
     <param name="color/r" value="1.0"/>
     <param name="color/g" value="0.0"/>
@@ -35,7 +35,7 @@
     <param name="frame_id" value="l1_map"/>
     <param name="filter_ground" value="false"/>
     <param name="base_frame_id" value="arch"/>
-    <param name="resolution" value="0.2"/>
+    <param name="resolution" value="0.05"/>
     <param name="height_map" value="false"/>
     <param name="color/r" value="0.0"/>
     <param name="color/g" value="0.0"/>
@@ -48,7 +48,7 @@
     <param name="frame_id" value="l1_map"/>
     <param name="filter_ground" value="false"/>
     <param name="base_frame_id" value="arch"/>
-    <param name="resolution" value="0.2"/>
+    <param name="resolution" value="0.05"/>
     <param name="height_map" value="false"/>
     <param name="color/r" value="0.0"/>
     <param name="color/g" value="1.0"/>
