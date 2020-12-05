@@ -1,0 +1,24 @@
+<?xml version="1.0"?>
+ 
+<launch>
+ 
+    <arg name="path" default="/home/dakota/" />
+    <arg name="file_1" default="main_lidar_locus" />
+    <arg name="file_2" default="front_lidar_locus" />
+    <arg name="file_3" default="rear_lidar_locus" />
+    <arg name="odom_file" default="main_lidar_odom_renamed" />
+ 
+    <param name="/use_sim_time" value="true" />
+    <node pkg="rosbag" type="play" name="player1" output="screen" args="--clock $(arg path)$(arg file_1).bag $(arg path)$(arg file_2).bag $(arg path)$(arg file_3).bag $(find final)/$(arg odom_file).bag" />
+ 
+    <node pkg="tf2_ros" type="static_transform_publisher" name="arch_main" output="screen" args="-0.02896 0.0267886 -0.40486 -0.00095 0.00230706 -0.38147255 0.9243768 husky4/velodyne arch" />
+    <!--node pkg="tf2_ros" type="static_transform_publisher" name="arch_main" output="screen" args="0.038 0 0.405 0.78278 -0.0049916 0.0 arch husky4/velodyne" /-->
+    <node pkg="tf2_ros" type="static_transform_publisher" name="arch_front" output="screen" args="0.138 -0.01 0.285 -0.0052 0.445058 0.0 arch husky4/velodyne_front" />
+    <node pkg="tf2_ros" type="static_transform_publisher" name="arch_rear" output="screen" args="-0.47 0 0.21 3.15555 0.428 0.0 arch husky4/velodyne_rear" />
+ 
+    <node pkg="final" type="odom_to_tf.py" name="odom_to_tf" output="screen"/>
+ 
+ 
+ 
+</launch>
+
