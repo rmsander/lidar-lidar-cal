@@ -181,7 +181,6 @@ main_icp = parse_icp_cov(main_odometry)
 front_icp = parse_icp_cov(front_odometry)
 rear_icp = parse_icp_cov(rear_odometry)
 
-"""
 # Calculate relative poses
 main_rel_poses = relative_pose_processing.calc_rel_poses(main_aligned)
 front_rel_poses = relative_pose_processing.calc_rel_poses(front_aligned)
@@ -253,7 +252,6 @@ print("_________________________________________________________")
 print("Initial Guess for Front-Rear Transformation: \n {}".format(initial_guess_front_rear))
 print("Optimal solution between front and rear reference frames: \n {}".format(Xopt_front_rear))
 print("_________________________________________________________")
-"""
 
 # Plot odometry of all three lidars
 plt.figure()
