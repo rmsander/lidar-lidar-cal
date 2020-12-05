@@ -10,15 +10,27 @@ from scipy.spatial.transform import Rotation as R
 
 def save_transforms(f, t):
     """Function to save relative transforms to file using pickle."""
-    with open(f, "wb") as pkl:
+
+    # Create output directory if it doesn't already exist
+    if not os.path.exists("relative_transforms"):
+        os.mkdir("relative_transforms")
+
+    # Write transforms to pkl file
+    out_path = os.path.join("relative_transforms", f)
+    with open(out_path, "wb") as pkl:
         pickle.dump(t, pkl)
         pkl.close()
-        print("Relative transforms saved to: {}".format(f))
+        print("Relative transforms saved to: {}".format(out_path))
 
+    # Write transforms to text file
+    for sensor, T in t.items():
+        out_path = os.path.join("relative_transforms", "{}.txt".format(sensor))
+        np.savetxt(out_path, T)
 
 def load_transforms(f):
     """Function to load relative transforms from file."""
-    with open(f, "rb") as pkl:
+    open_path = os.path.join("relative_transforms", f)
+    with open(open_path, "rb") as pkl:
         transforms_dict = pickle.load(pkl)
         pkl.close()
     return transforms_dict

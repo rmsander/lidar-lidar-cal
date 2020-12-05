@@ -24,14 +24,34 @@ REAR_ODOM_CSV = 'rear_odometry_clean.csv'
 # Specify path for relative transformations between poses
 PKL_POSES_PATH = 'relative_transforms.pkl'
 
-def compute_weights(R, t):
+def compute_weights(odom_df, type="main"):
     """Computes the covariance of the rotation matrix and the standard
     deviation of translation matrices to weight the samples in the optimization
-    objective."""
-    pass
+    objective.
 
-def parse_icp_cov(odom_df):
-    """Function to parse the ICP covariance matrix for the given input df.
+    Parameters:
+        R (np.array): 3x3 rotation matrix extra
+    """
+    # Compute translations and compute covariance over all of them
+    t = odom_df[["x", "y", "z"]].values  # Translation - with shape (N, 3)
+    cov_t = np.cov(t.T)
+
+    # Extract quaternions from odometric data frame
+    Q = odom_df[["qx", "qy", "qz", "qw"]].values
+
+    # Convert quaternions to euler angles
+    E = np.zeros((Q.shape[0], 3))  # RPY angles array
+    for i, q in enumerate(Q):  # Iterate over each quaternion
+        E[i] = R.from_quat(q).as_euler('xyz', degrees=False)
+
+    # From here, we need to extract rotations about x,y,z to compute covariance
+    cov_E = 0  # PLACEHOLDER
+
+    return cov_t, cov_E
+
+def parse_icp_cov(odom_df, type="main"):
+    """Function to parse the ICP covariance matrix for the given input df.  Saves
+    a dictionary containing ICP covariance matrices to a pkl file.
 
     Paramaters:
         odom_df (pd.DataFrame):  DataFrame containing the (cleaned) odometric
@@ -41,13 +61,21 @@ def parse_icp_cov(odom_df):
         cov_by_frame (dict):  Dictionary where each key is a frame number, and
             each value is a corresponding ICP 6x6 matrix for that specific frame.
     """
+    # Load odometry
     cov_columns = odom_df.filter(regex=("cov_pose_*"))
+
+    # Iteratively add ICP frame-by-frame
     cov_by_frame = {i: 0 for i in range(cov_columns.shape[0])}
     for i, row in enumerate(cov_columns.iterrows()):
         cov_by_frame[i] = np.array(row[1:]).reshape((6, 6))  # Reshape into 6 x 6 covariance matrix
+
+    # Save ICP matrices to pkl files
+    fname = "icp_cov_" + type + ".pkl"
+    with open(fname, "wb") as pkl:
+        pickle.dump(cov_by_frame, pkl)
+        pkl.close()
+
     return cov_by_frame
-
-
 
 
 def cost_main_front(X):
@@ -177,15 +205,16 @@ rear_odometry = relative_pose_processing.process_df(REAR_ODOM_CSV)
 (main_aligned, front_aligned, rear_aligned) = relative_pose_processing.align_df([main_odometry, front_odometry, rear_odometry])
 
 # Get ICP covariance matrices
-main_icp = parse_icp_cov(main_odometry)
-front_icp = parse_icp_cov(front_odometry)
-rear_icp = parse_icp_cov(rear_odometry)
+main_icp = parse_icp_cov(main_odometry, type="main")
+front_icp = parse_icp_cov(front_odometry, type="front")
+rear_icp = parse_icp_cov(rear_odometry, type="rear")
 
 # Calculate relative poses
 main_rel_poses = relative_pose_processing.calc_rel_poses(main_aligned)
 front_rel_poses = relative_pose_processing.calc_rel_poses(front_aligned)
 rear_rel_poses = relative_pose_processing.calc_rel_poses(rear_aligned)
 
+"""
 # Optimization (1) Instantiate a manifold
 translation_manifold = Euclidean(3)  # Translation vector
 so3 = Rotations(3)  # Rotation matrix
@@ -221,9 +250,9 @@ print("INITIAL GUESS FRONT REAR: \n R0: \n {} \n\n t0: \n {} \n".format(R0_front
 # Carry out optimization for main-front homogeneous transformations
 problem_main_front = Problem(manifold=manifold, cost=cost_main_front)  # (2a) Compute the optimization between main and front
 solver_main_front = SteepestDescent()  # (3) Instantiate a Pymanopt solver
-#Xopt_main_front = solver_main_front.solve(problem_main_front, x=X0_main_front)
+Xopt_main_front = solver_main_front.solve(problem_main_front, x=X0_main_front)
 print("Initial Guess for Main-Front Transformation: \n {}".format(initial_guess_main_front))
-#print("Optimal solution between main and front reference frames: \n {}".format(Xopt_main_front))
+print("Optimal solution between main and front reference frames: \n {}".format(Xopt_main_front))
 
 # Carry out optimization for main-rear homogeneous transformations
 problem_main_rear = Problem(manifold=manifold, cost=cost_main_rear)  # (2a) Compute the optimization between main and front
@@ -280,5 +309,7 @@ def plot(odom_df, lidar_type=None, color="b"):
 plot(main_odometry, lidar_type="Main", color="r")
 plot(front_odometry, lidar_type="Front", color="g")
 plot(rear_odometry, lidar_type="Rear", color="b")
+"""
 
-
+# Compute the weights for optimization
+compute_weights(main_odometry, type="main")
