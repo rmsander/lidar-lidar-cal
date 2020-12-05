@@ -1,6 +1,16 @@
 Lidar Calibration Exploratory Tools
 ===================================
 
+Installation
+============
+
+In order to see the cumulative point clouds, you need to install octomap:
+
+```
+sudo apt-get install ros-melodic-octomap-server                                                
+sudo apt-get install ros-melodic-octomap   
+```
+
 clean\_csvs.py
 --------------
 Generates csvs for the lidar odometry with sensible header names: `time, x, y,
