@@ -10,7 +10,8 @@ import autograd.numpy as np
 
 from pymanopt.manifolds import Euclidean, Rotations, Product
 from pymanopt import Problem
-from pymanopt.solvers import SteepestDescent, TrustRegions
+from pymanopt.solvers import TrustRegions
+from custom_solver import CustomSteepestDescent
 
 import relative_pose_processing
 from extract_pose_yaml import load_transforms
@@ -23,6 +24,13 @@ REAR_ODOM_CSV = 'rear_odometry_clean.csv'
 
 # Specify path for relative transformations between poses
 PKL_POSES_PATH = 'relative_transforms.pkl'
+
+# Path for results from manifold optimization
+ANALYSIS_RESULTS_PATH = 'analysis_results'
+
+# Create results directory
+if not os.path.exists(ANALYSIS_RESULTS_PATH):
+    os.mkdir(ANALYSIS_RESULTS_PATH)
 
 def compute_weights(odom_df, type="main"):
     """Computes the covariance of the rotation matrix and the standard
@@ -45,7 +53,7 @@ def compute_weights(odom_df, type="main"):
         E[i] = R.from_quat(q).as_euler('xyz', degrees=False)
 
     # From here, we need to extract rotations about x,y,z to compute covariance
-    cov_E = 0  # PLACEHOLDER
+    cov_E = np.cov(E.T)
 
     return cov_t, cov_E
 
@@ -209,12 +217,16 @@ main_icp = parse_icp_cov(main_odometry, type="main")
 front_icp = parse_icp_cov(front_odometry, type="front")
 rear_icp = parse_icp_cov(rear_odometry, type="rear")
 
+# Compute the covariance of translation and rotation (the latter uses Euler angles)
+cov_t_main, cov_R_main = compute_weights(main_odometry, type="main")
+cov_t_front, cov_R_front = compute_weights(front_odometry, type="front")
+cov_t_rear, cov_R_rear = compute_weights(rear_odometry, type="rear")
+
 # Calculate relative poses
 main_rel_poses = relative_pose_processing.calc_rel_poses(main_aligned)
 front_rel_poses = relative_pose_processing.calc_rel_poses(front_aligned)
 rear_rel_poses = relative_pose_processing.calc_rel_poses(rear_aligned)
 
-"""
 # Optimization (1) Instantiate a manifold
 translation_manifold = Euclidean(3)  # Translation vector
 so3 = Rotations(3)  # Rotation matrix
@@ -247,26 +259,109 @@ R0_front_rear, t0_front_rear = initial_guess_front_rear[:3, :3], initial_guess_f
 X0_front_rear = (R0_front_rear, t0_front_rear)
 print("INITIAL GUESS FRONT REAR: \n R0: \n {} \n\n t0: \n {} \n".format(R0_front_rear, t0_front_rear))
 
+
+######################## MAIN FRONT CALIBRATION ################################
 # Carry out optimization for main-front homogeneous transformations
 problem_main_front = Problem(manifold=manifold, cost=cost_main_front)  # (2a) Compute the optimization between main and front
-solver_main_front = SteepestDescent()  # (3) Instantiate a Pymanopt solver
+solver_main_front = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
 Xopt_main_front = solver_main_front.solve(problem_main_front, x=X0_main_front)
 print("Initial Guess for Main-Front Transformation: \n {}".format(initial_guess_main_front))
 print("Optimal solution between main and front reference frames: \n {}".format(Xopt_main_front))
 
+# Take intermediate values for plotting
+estimates_x_main_front = solver_main_front.estimates
+errors_main_front = solver_main_front.errors
+iters_main_front = solver_main_front.iterations
+
+# Metrics dictionary
+estimates_dict_main_front = {i: T for i, T in zip(iters_main_front, estimates_x_main_front)}
+error_dict_main_front = {i: e for i, e in zip(iters_main_front, errors_main_front)}
+
+# Save intermediate results to a pkl file
+estimates_fname_main_front = os.path.join(ANALYSIS_RESULTS_PATH,
+                                          "estimates_main_front.pkl")
+error_fname_main_front = os.path.join(ANALYSIS_RESULTS_PATH,
+                                          "error_main_front.pkl")
+
+# Save estimates to pickle file
+with open(estimates_fname_main_front, "wb") as pkl_estimates:
+    pickle.dump(estimates_dict_main_front, pkl_estimates)
+    pkl_estimates.close()
+
+# Save error to pickle file
+with open(error_fname_main_front, "wb") as pkl_error:
+    pickle.dump(error_dict_main_front, pkl_error)
+    pkl_error.close()
+################################################################################
+
+######################## MAIN REAR CALIBRATION #################################
 # Carry out optimization for main-rear homogeneous transformations
 problem_main_rear = Problem(manifold=manifold, cost=cost_main_rear)  # (2a) Compute the optimization between main and front
-solver_main_rear = SteepestDescent()  # (3) Instantiate a Pymanopt solver
+solver_main_rear = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
 Xopt_main_rear = solver_main_rear.solve(problem_main_rear, x=X0_main_rear)
 print("Initial Guess for Main-Rear Transformation: \n {}".format(initial_guess_main_rear))
 print("Optimal solution between main and rear reference frames: \n {}".format(Xopt_main_rear))
 
+# Take intermediate values for plotting
+estimates_x_main_rear = solver_main_rear.estimates
+errors_main_rear = solver_main_rear.errors
+iters_main_rear = solver_main_rear.iterations
+
+# Metrics dictionary
+estimates_dict_main_rear = {i: T for i, T in zip(iters_main_rear, estimates_x_main_rear)}
+error_dict_main_rear = {i: e for i, e in zip(iters_main_rear, errors_main_rear)}
+
+# Save intermediate results to a pkl file
+estimates_fname_main_rear = os.path.join(ANALYSIS_RESULTS_PATH,
+                                          "estimates_main_rear.pkl")
+error_fname_main_rear = os.path.join(ANALYSIS_RESULTS_PATH,
+                                      "error_main_rear.pkl")
+
+# Save estimates to pickle file
+with open(estimates_fname_main_rear, "wb") as pkl_estimates:
+    pickle.dump(estimates_dict_main_rear, pkl_estimates)
+    pkl_estimates.close()
+
+# Save error to pickle file
+with open(error_fname_main_rear, "wb") as pkl_error:
+    pickle.dump(error_dict_main_rear, pkl_error)
+    pkl_error.close()
+################################################################################
+
+######################## FRONT REAR CALIBRATION ################################
 # Carry out optimization for front-rear homogeneous transformations
 problem_front_rear = Problem(manifold=manifold, cost=cost_front_rear)  # (2a) Compute the optimization between main and front
-solver_front_rear = SteepestDescent()  # (3) Instantiate a Pymanopt solver
+solver_front_rear = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
 Xopt_front_rear = solver_front_rear.solve(problem_front_rear, x=X0_front_rear)
 print("Initial Guess for Front-Rear Transformation: \n {}".format(initial_guess_front_rear))
 print("Optimal solution between front and rear reference frames: \n {}".format(Xopt_front_rear))
+
+# Take intermediate values for plotting
+estimates_x_front_rear = solver_front_rear.estimates
+errors_front_rear = solver_front_rear.errors
+iters_front_rear = solver_front_rear.iterations
+
+# Metrics dictionary
+estimates_dict_front_rear = {i: T for i, T in zip(iters_front_rear, estimates_x_front_rear)}
+error_dict_front_rear = {i: e for i, e in zip(iters_front_rear, errors_front_rear)}
+
+# Save intermediate results to a pkl file
+estimates_fname_front_rear = os.path.join(ANALYSIS_RESULTS_PATH,
+                                          "estimates_front_rear.pkl")
+error_fname_front_rear = os.path.join(ANALYSIS_RESULTS_PATH,
+                                      "error_front_rear.pkl")
+
+# Save estimates to pickle file
+with open(estimates_fname_front_rear, "wb") as pkl_estimates:
+    pickle.dump(estimates_dict_front_rear, pkl_estimates)
+    pkl_estimates.close()
+
+# Save error to pickle file
+with open(error_fname_front_rear, "wb") as pkl_error:
+    pickle.dump(error_dict_front_rear, pkl_error)
+    pkl_error.close()
+################################################################################
+
 
 # Display all results
 print("_________________________________________________________")
@@ -296,7 +391,8 @@ plt.show()
 plt.clf()
 
 # individual odometry plotting function
-def plot(odom_df, lidar_type=None, color="b"):
+def plot_odometry(odom_df, lidar_type=None, color="b"):
+    """Plotting function for odometry."""
     plt.plot(odom_df.x, color=color)
     plt.xlabel("Time")
     plt.ylabel("Odometric Position")
@@ -305,11 +401,24 @@ def plot(odom_df, lidar_type=None, color="b"):
     plt.show()
     plt.clf()
 
-# Now create plots for other types of odometry
-plot(main_odometry, lidar_type="Main", color="r")
-plot(front_odometry, lidar_type="Front", color="g")
-plot(rear_odometry, lidar_type="Rear", color="b")
-"""
+def plot_error(err, lidar_type=None, color="b"):
+    """Plotting function for error as a function of optimization iteration."""
+    plt.plot(err, color=color)
+    plt.xlabel("Iteration Number")
+    plt.ylabel("Error")
+    plt.title("Error vs. Optimization Iteration for Lidar {}".format(lidar_type))
+    plt.savefig("odometry_error_{}.png".format(lidar_type))
+    plt.show()
+    plt.clf()
 
-# Compute the weights for optimization
-compute_weights(main_odometry, type="main")
+
+# Now create plots for other types of odometry
+plot_odometry(main_odometry, lidar_type="Main", color="r")
+plot_odometry(front_odometry, lidar_type="Front", color="g")
+plot_odometry(rear_odometry, lidar_type="Rear", color="b")
+
+
+# Now plot errors as a function of iterations
+plot_error(errors_main_front, lidar_type="Main", color="r")
+plot_error(errors_main_rear, lidar_type="Front", color="g")
+plot_error(errors_front_rear, lidar_type="Rear", color="b")

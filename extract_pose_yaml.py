@@ -183,7 +183,7 @@ def main():
         print("DET: {}".format(np.linalg.det(transformed_pose_sensor_dict[sensor])))
 
     # Save relative transforms to file
-    out_file = os.path.join(os.getcwd(), "relative_transforms.pkl")
+    out_file = "relative_transforms.pkl"
     save_transforms(out_file, transformed_pose_sensor_dict)
 
 
