@@ -142,6 +142,10 @@ add_executable(analyze_clouds src/analyze_clouds.cpp)
 
 add_executable(ros_to_pcds src/ros_to_pcds.cpp)
 
+add_executable(build_and_analyze src/build_and_analyze.cpp)
+add_executable(analyze_final src/analyze_final.cpp)
+add_executable(build_perturbed src/build_perturbed.cpp)
+
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
 ## target back to the shorter version for ease of user use
@@ -159,6 +163,9 @@ target_link_libraries(save_octomap_cloud
 target_link_libraries(save_octomap_cloud ${catkin_LIBRARIES})
 target_link_libraries(analyze_clouds ${catkin_LIBRARIES})
 target_link_libraries(ros_to_pcds ${catkin_LIBRARIES})
+target_link_libraries(build_and_analyze ${catkin_LIBRARIES})
+target_link_libraries(analyze_final ${catkin_LIBRARIES})
+target_link_libraries(build_perturbed ${catkin_LIBRARIES})
 
 #############
 ## Install ##
