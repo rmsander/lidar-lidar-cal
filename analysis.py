@@ -1,5 +1,8 @@
 #!/usr/bin/python3
 
+"""Functions and function calls for computing and estimating the relative
+transformations between our lidar frames."""
+
 # Native Python imports
 import pickle
 import os
@@ -19,6 +22,11 @@ from analysis_utils import cost, parse_icp_cov, plot_all_odom, plot_covs, \
     plot_error, compute_weights_euler, extract_variance, compute_rmse_weighted, \
     compute_rmse_unweighted, display_and_save_rmse
 
+# For rejecting samples if the ICP covariance is too high
+REJECT_THR = 100
+
+# Whether to weight our estimate
+WEIGHTED = True
 
 # Specify odometry CSV file paths
 MAIN_ODOM_CSV = 'main_odometry_clean.csv'
@@ -29,8 +37,9 @@ REAR_ODOM_CSV = 'rear_odometry_clean.csv'
 PKL_POSES_PATH = 'relative_transforms.pkl'
 
 # Path for results from manifold optimization
-ANALYSIS_RESULTS_PATH = 'analysis_results'
-FINAL_ESTIMATES_PATH = 'final_estimates'
+ANALYSIS_RESULTS_PATH = 'analysis_results_weighted_{}'.format(WEIGHTED)
+FINAL_ESTIMATES_PATH = 'final_estimates_weighted_{}'.format(WEIGHTED)
+ODOMETRY_PLOTS_PATH = 'odometry_plots_weighted_{}'.format(WEIGHTED)
 
 # Create results directories
 if not os.path.exists(ANALYSIS_RESULTS_PATH):  # Where errors and all estimates are stored
@@ -39,6 +48,8 @@ if not os.path.exists(ANALYSIS_RESULTS_PATH):  # Where errors and all estimates 
 if not os.path.exists(FINAL_ESTIMATES_PATH):  # Where estimates are stored
     os.mkdir(FINAL_ESTIMATES_PATH)
 
+if not os.path.exists(ODOMETRY_PLOTS_PATH):  # Where odometry plots are saved
+    os.mkdir(ODOMETRY_PLOTS_PATH)
 
 def make_all_plots():
     """Function to create all plots from this analysis."""
@@ -70,17 +81,20 @@ def main():
     # Main lidar odometry
     main_icp, main_trans_cov, main_trans_cov_max, \
         main_trans_cov_avg, main_rot_cov, main_rot_cov_max, \
-        main_rot_cov_avg, main_reject = parse_icp_cov(main_odometry, type="main")
+        main_rot_cov_avg, main_reject = parse_icp_cov(main_odometry, type="main",
+                                                      reject_thr=REJECT_THR)
 
     # Front lidar odometry
     front_icp, front_trans_cov, front_trans_cov_max, \
         front_trans_cov_avg, front_rot_cov, front_rot_cov_max, \
-        front_rot_cov_avg, front_reject = parse_icp_cov(front_odometry, type="front")
+        front_rot_cov_avg, front_reject = parse_icp_cov(front_odometry, type="front",
+                                                        reject_thr=REJECT_THR)
 
     # Rear lidar odometry
     rear_icp, rear_trans_cov, rear_trans_cov_max, \
         rear_trans_cov_avg, rear_rot_cov, rear_rot_cov_max, \
-        rear_rot_cov_avg, rear_reject = parse_icp_cov(rear_odometry, type="rear")
+        rear_rot_cov_avg, rear_reject = parse_icp_cov(rear_odometry, type="rear",
+                                                      reject_thr=REJECT_THR)
 
     # Compute the covariance of translation and rotation (the latter uses Euler angles)
     cov_t_main, cov_R_main = compute_weights_euler(main_odometry, type="main")
@@ -149,7 +163,7 @@ def main():
     rho = np.mean([var_t_main, var_t_front])  # Take average across different odometries
     ### PARAMETERS ###
 
-    cost_main_front = lambda x: cost(x, A, B, r, rho, omega)
+    cost_main_front = lambda x: cost(x, A, B, r, rho, omega, WEIGHTED)
     problem_main_front = Problem(manifold=manifold, cost=cost_main_front)  # (2a) Compute the optimization between main and front
     solver_main_front = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
     Xopt_main_front = solver_main_front.solve(problem_main_front, x=X0_main_front)
@@ -186,12 +200,20 @@ def main():
     print("DIFFERENCE IN MATRICES: \n {}".format(np.subtract(XOpt_T_main_front, initial_guess_main_front)))
 
     # Compute the weighted and unweighted RMSE
-    rmse_init_weighted, rmse_final_weighted = compute_rmse_weighted(
-        initial_guess_main_front, XOpt_T_main_front, A, B, rho, omega)
-    rmse_init_unweighted, rmse_final_unweighted = compute_rmse_unweighted(
-        initial_guess_main_front, XOpt_T_main_front, A, B)
-    rmses = [rmse_init_unweighted, rmse_final_unweighted,
-             rmse_init_weighted, rmse_final_weighted]
+    rmse_init_weighted, rmse_final_weighted, rmse_init_R_weighted, \
+    rmse_init_t_weighted, rmse_final_R_weighted, \
+    rmse_final_t_weighted = compute_rmse_weighted(initial_guess_main_front,
+                                                  XOpt_T_main_front, A, B, rho,
+                                                  omega)
+    rmse_init_unweighted, rmse_final_unweighted, rmse_init_R_unweighted, \
+    rmse_init_t_unweighted, rmse_final_R_unweighted, \
+    rmse_final_t_unweighted = compute_rmse_unweighted(initial_guess_main_front,
+                                                      XOpt_T_main_front, A, B)
+    rmses = [rmse_init_unweighted, rmse_final_unweighted, rmse_init_weighted, rmse_final_weighted,
+             rmse_init_R_unweighted, rmse_init_t_unweighted,
+             rmse_final_R_unweighted, rmse_final_t_unweighted,
+             rmse_init_R_weighted, rmse_init_t_weighted,
+             rmse_final_R_weighted, rmse_final_t_weighted]
 
     # Display and save RMSEs
     outpath = os.path.join(ANALYSIS_RESULTS_PATH, "main_front_rmse.txt")
@@ -202,10 +224,8 @@ def main():
                                           "main_front_final.txt")
     np.savetxt(final_estimate_outpath, XOpt_T_main_front)
     ################################################################################
-    
-    
-    
-    
+
+
     ######################## MAIN REAR CALIBRATION #################################
     ### PARAMETERS ###
     A = np.array(rear_rel_poses)  # First set of poses
@@ -216,7 +236,7 @@ def main():
     rho = np.mean([var_t_main, var_t_rear])  # Take average across different odometries
     ### PARAMETERS ###
 
-    cost_main_rear = lambda x: cost(x, A, B, r, rho, omega)
+    cost_main_rear = lambda x: cost(x, A, B, r, rho, omega, WEIGHTED)
     # Carry out optimization for main-rear homogeneous transformations
     problem_main_rear = Problem(manifold=manifold, cost=cost_main_rear)  # (2a) Compute the optimization between main and front
     solver_main_rear = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
@@ -254,12 +274,17 @@ def main():
     print("DIFFERENCE IN MATRICES: \n {}".format(np.subtract(XOpt_T_main_rear, initial_guess_main_rear)))
 
     # Compute the weighted and unweighted RMSE
-    rmse_init_weighted, rmse_final_weighted = compute_rmse_weighted(
-        initial_guess_main_front, XOpt_T_main_front, A, B, rho, omega)
-    rmse_init_unweighted, rmse_final_unweighted = compute_rmse_unweighted(
-        initial_guess_main_front, XOpt_T_main_front, A, B)
-    rmses = [rmse_init_unweighted, rmse_final_unweighted,
-             rmse_init_weighted, rmse_final_weighted]
+    rmse_init_weighted, rmse_final_weighted, rmse_init_R_weighted, \
+           rmse_init_t_weighted, rmse_final_R_weighted, \
+           rmse_final_t_weighted = compute_rmse_weighted(initial_guess_main_rear, XOpt_T_main_rear, A, B, rho, omega)
+    rmse_init_unweighted, rmse_final_unweighted, rmse_init_R_unweighted, \
+           rmse_init_t_unweighted, rmse_final_R_unweighted, \
+           rmse_final_t_unweighted = compute_rmse_unweighted(initial_guess_main_rear, XOpt_T_main_rear, A, B)
+    rmses = [rmse_init_unweighted, rmse_final_unweighted, rmse_init_weighted, rmse_final_weighted,
+             rmse_init_R_unweighted, rmse_init_t_unweighted,
+             rmse_final_R_unweighted, rmse_final_t_unweighted,
+             rmse_init_R_weighted, rmse_init_t_weighted,
+             rmse_final_R_weighted, rmse_final_t_weighted]
 
     # Display and save RMSEs
     outpath = os.path.join(ANALYSIS_RESULTS_PATH, "main_rear_rmse.txt")
@@ -283,7 +308,7 @@ def main():
     rho = np.mean([var_t_front, var_t_rear])  # Take average across different odometries
     ### PARAMETERS ###
 
-    cost_front_rear = lambda x: cost(x, A, B, r, rho, omega)
+    cost_front_rear = lambda x: cost(x, A, B, r, rho, omega, WEIGHTED)
     # Carry out optimization for front-rear homogeneous transformations
     problem_front_rear = Problem(manifold=manifold, cost=cost_front_rear)  # (2a) Compute the optimization between main and front
     solver_front_rear = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
@@ -321,12 +346,21 @@ def main():
     print("DIFFERENCE IN MATRICES: \n {}".format(np.subtract(XOpt_T_front_rear, initial_guess_front_rear)))
 
     # Compute the weighted and unweighted RMSE
-    rmse_init_weighted, rmse_final_weighted = compute_rmse_weighted(
-        initial_guess_main_front, XOpt_T_main_front, A, B, rho, omega)
-    rmse_init_unweighted, rmse_final_unweighted = compute_rmse_unweighted(
-        initial_guess_main_front, XOpt_T_main_front, A, B)
-    rmses = [rmse_init_unweighted, rmse_final_unweighted,
-             rmse_init_weighted, rmse_final_weighted]
+    rmse_init_weighted, rmse_final_weighted, rmse_init_R_weighted, \
+    rmse_init_t_weighted, rmse_final_R_weighted, \
+    rmse_final_t_weighted = compute_rmse_weighted(initial_guess_front_rear,
+                                                  XOpt_T_front_rear, A, B, rho,
+                                                  omega)
+    rmse_init_unweighted, rmse_final_unweighted, rmse_init_R_unweighted, \
+    rmse_init_t_unweighted, rmse_final_R_unweighted, \
+    rmse_final_t_unweighted = compute_rmse_unweighted(initial_guess_front_rear,
+                                                      XOpt_T_front_rear, A, B)
+    rmses = [rmse_init_unweighted, rmse_final_unweighted, rmse_init_weighted,
+             rmse_final_weighted,
+             rmse_init_R_unweighted, rmse_init_t_unweighted,
+             rmse_final_R_unweighted, rmse_final_t_unweighted,
+             rmse_init_R_weighted, rmse_init_t_weighted,
+             rmse_final_R_weighted, rmse_final_t_weighted]
 
     # Display and save RMSEs
     outpath = os.path.join(ANALYSIS_RESULTS_PATH, "front_rear_rmse.txt")

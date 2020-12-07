@@ -1,5 +1,18 @@
+#!/usr/bin/python3
+
+"""A customized implementation of the pymanopt SteepestDescent solver.
+Specifically, we have added functionality for keeping track of:
+
+i) Error/cost terms for the current estimate
+ii) The current iteration number
+iii) The current estimate of the quantity to be optimized.
+"""
+
+# Native Python imports
 import time
 from copy import deepcopy
+
+# Maniold optimization
 from pymanopt.solvers.steepest_descent import SteepestDescent
 from pymanopt.solvers.linesearch import LineSearchBackTracking
 
