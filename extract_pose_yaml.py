@@ -2,10 +2,13 @@
 
 """Script for finding relative pose between velodyne and the rest of the other sensors."""
 
-import numpy as np
+# Native python imports
 import yaml
 import os
 import pickle
+
+# NumPy
+import numpy as np
 
 from scipy.spatial.transform import Rotation as R
 

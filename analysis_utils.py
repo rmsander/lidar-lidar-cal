@@ -7,8 +7,6 @@ import pickle
 from scipy.spatial.transform import Rotation as R
 import autograd.numpy as np
 
-# For rejecting samples if the ICP covariance is too high
-REJECT_THR = 10
 
 def _plot_icp_cov(cov, lidar_type=None, comp="Rotation",
                   coord="x", color="b", results_dir="icp_plots"):
@@ -113,13 +111,16 @@ def plot_error(err, lidar_type=None, color="b"):
     plt.clf()
 
 
-def parse_icp_cov(odom_df, type="main"):
+def parse_icp_cov(odom_df, type="main", reject_thr=100):
     """Function to parse the ICP covariance matrix for the given input df.  Saves
     a dictionary containing ICP covariance matrices to a pkl file.
 
     Paramaters:
         odom_df (pd.DataFrame):  DataFrame containing the (cleaned) odometric
             data for one of the lidars.
+        type (str):  The type of lidar (main, front, or rear) we are considering.
+        reject_thr (int):  The variance from an ICP estimate at which we reject
+            the sample.
 
     Returns:
         cov_by_frame (dict):  Dictionary where each key is a frame number, and
@@ -152,7 +153,7 @@ def parse_icp_cov(odom_df, type="main"):
     # Used for determining if samples should be rejected
     reject = [False for i in range(cov_columns.shape[0])]
     for i in range(len(reject)):
-        if rot_cov_max[i] > REJECT_THR:
+        if rot_cov_max[i] > reject_thr:
             reject[i] = True
 
     for i in range(len(list(cov_by_frame.keys()))):
@@ -175,7 +176,7 @@ def parse_icp_cov(odom_df, type="main"):
            trans_cov_avg, rot_cov, rot_cov_max, rot_cov_avg, reject
 
 
-def cost(X, A, B, r, rho, omega):
+def cost(X, A, B, r, rho, omega, weighted):
     """Function to compute the cost between two sets of poses given by the
     lists A and B.  This cost function is passed in as a parameter to the
     manifold SE(3) manifold optimization.
@@ -192,6 +193,7 @@ def cost(X, A, B, r, rho, omega):
             sample, according to whether its ICP covariance is high or low.
         rho (float):  Float corresponding to the variance weighting for translation.
         omega (float):  Float corresponding to the variance weighting for translation.
+        weighted (bool):  Whether or not to weight the estimates.
 
     Returns:
         cost (float):  The total cost computed over the sets of poses.
@@ -209,13 +211,18 @@ def cost(X, A, B, r, rho, omega):
 
     # Sum the cost over all poses
     for ix in range(len(A)):
-        if not r[ix]:  # If we don't reject the sample, compute cost
+        if weighted:  # Compute a weighted estimate
+            if not r[ix]:  # If we don't reject the sample, compute cost
+                M = B[ix] @ Tab @ np.linalg.inv(A[ix]) - Tab
+                O = np.array([[omega, 0, 0, 0],
+                              [0, omega, 0, 0],
+                              [0, 0, omega, 0],
+                              [0, 0, 0, rho]])
+                cost += np.trace(M @ O @ M.T)
+
+        else:  # Compute an unweighted estimate
             M = B[ix] @ Tab @ np.linalg.inv(A[ix]) - Tab
-            O = np.array([[omega, 0, 0, 0],
-                          [0, omega, 0, 0],
-                          [0, 0, omega, 0],
-                          [0, 0, 0, rho]])
-            cost += np.trace(M @ O @ M.T)
+            cost += np.trace(M @ M.T)
 
     return cost
 
@@ -242,6 +249,13 @@ def compute_rmse_unweighted(X_init, X_final, A, B):
     mse_init = 0
     mse_final = 0
 
+    # MSE for rotation and translation
+    mse_init_R = 0
+    mse_final_R = 0
+    mse_init_t = 0
+    mse_final_t = 0
+
+
     # Check to make sure that A and B are autograd arrays
     A = np.array(A)
     B = np.array(B)
@@ -256,15 +270,29 @@ def compute_rmse_unweighted(X_init, X_final, A, B):
         M_init = B[ix] @ X_init @ np.linalg.inv(A[ix]) - X_init
         mse_init += np.trace(M_init @ M_init.T)
 
+        # Use M_init to get rotation and translation error
+        mse_init_R += np.trace(M_init[:3, :3] @ M_init[:3, :3].T)
+        mse_init_t += np.square(np.linalg.norm(M_init[:3, 3]))
+
         # Compute element-wise cost term for initial estimate
         M_final = B[ix] @ X_final @ np.linalg.inv(A[ix]) - X_final
         mse_final += np.trace(M_final @ M_final.T)
 
+        # Use M_init to get rotation and translation error
+        mse_final_R += np.trace(M_final[:3, :3] @ M_final[:3, :3].T)
+        mse_final_t += np.square(np.linalg.norm(M_final[:3, 3]))
+
     # Finally, take the square root to get rmse
     rmse_init = np.sqrt(mse_init / N)
+    rmse_init_R = np.sqrt(mse_init_R / N)
+    rmse_init_t = np.sqrt(mse_init_t / N)
     rmse_final = np.sqrt(mse_final / N)
+    rmse_final_R = np.sqrt(mse_final_R / N)
+    rmse_final_t = np.sqrt(mse_final_t / N)
 
-    return rmse_init, rmse_final
+
+    return rmse_init, rmse_final, rmse_init_R, \
+           rmse_init_t, rmse_final_R, rmse_final_t
 
 def compute_rmse_weighted(X_init, X_final, A, B, rho, omega):
     """Computes the weighted RMSE over the entire trajectory.  Used as a benchmark to
@@ -289,6 +317,12 @@ def compute_rmse_weighted(X_init, X_final, A, B, rho, omega):
     mse_init = 0
     mse_final = 0
 
+    # MSE for rotation and translation
+    mse_init_R = 0
+    mse_final_R = 0
+    mse_init_t = 0
+    mse_final_t = 0
+
     # Check to make sure that A and B are autograd arrays
     A = np.array(A)
     B = np.array(B)
@@ -309,15 +343,28 @@ def compute_rmse_weighted(X_init, X_final, A, B, rho, omega):
         M_init = B[ix] @ X_init @ np.linalg.inv(A[ix]) - X_init
         mse_init += np.trace(M_init @ O @ M_init.T)
 
+        # Use M_init to get rotation and translation error
+        mse_init_R += omega * np.trace(M_init[:3, :3] @ M_init[:3, :3].T)
+        mse_init_t += rho * np.square(np.linalg.norm(M_init[:3, 3]))
+
         # Compute element-wise cost term for initial estimate
         M_final = B[ix] @ X_final @ np.linalg.inv(A[ix]) - X_final
         mse_final += np.trace(M_final @ O @ M_final.T)
 
+        # Use M_init to get rotation and translation error
+        mse_final_R += omega * np.trace(M_final[:3, :3] @ M_final[:3, :3].T)
+        mse_final_t += rho * np.square(np.linalg.norm(M_final[:3, 3]))
+
     # Finally, take the square root to get rmse
     rmse_init = np.sqrt(mse_init / N)
+    rmse_init_R = np.sqrt(mse_init_R / N)
+    rmse_init_t = np.sqrt(mse_init_t / N)
     rmse_final = np.sqrt(mse_final / N)
+    rmse_final_R = np.sqrt(mse_final_R / N)
+    rmse_final_t = np.sqrt(mse_final_t / N)
 
-    return rmse_init, rmse_final
+    return rmse_init, rmse_final, rmse_init_R, \
+           rmse_init_t, rmse_final_R, rmse_final_t
 
 def compute_weights_euler(odom_df, type="main"):
     """Computes the covariance of the rotation matrix and the standard
@@ -356,18 +403,36 @@ def display_and_save_rmse(rmses, outpath):
             will be saved.
     """
     # Get different rmse values
-    rmse_init_unweighted, rmse_final_unweighted, \
-        rmse_init_weighted, rmse_final_weighted = rmses
+    rmse_init_unweighted, rmse_final_unweighted, rmse_init_weighted, rmse_final_weighted, \
+        rmse_init_R_unweighted, rmse_init_t_unweighted, rmse_final_R_unweighted, rmse_final_t_unweighted, \
+        rmse_init_R_weighted, rmse_init_t_weighted, rmse_final_R_weighted, rmse_final_t_weighted = rmses
 
     # Display RMSE values
     print("RMSE: \n"
           "  INITIAL UNWEIGHTED: {} \n"
           "  FINAL UNWEIGHTED: {} \n"
           "  INITIAL WEIGHTED: {} \n"
-          "  FINAL WEIGHTED: {} \n".format(rmse_init_unweighted,
+          "  FINAL WEIGHTED: {} \n"
+          "  INITIAL UNWEIGHTED R: {} \n"
+          "  INITIAL UNWEIGHTED t: {} \n"
+          "  FINAL UNWEIGHTED R: {} \n"
+          "  FINAL UNWEIGHTED t: {} \n"
+          "  INITIAL WEIGHTED R: {} \n"
+          "  INITIAL WEIGHTED t: {} \n"
+          "  FINAL WEIGHTED R: {} \n"
+          "  FINAL WEIGHTED T: {} \n".format(rmse_init_unweighted,
                                            rmse_final_unweighted,
                                            rmse_init_weighted,
-                                           rmse_final_weighted)
+                                           rmse_final_weighted,
+                                           rmse_init_R_unweighted,
+                                           rmse_init_t_unweighted,
+                                           rmse_final_R_unweighted,
+                                           rmse_final_t_unweighted,
+                                           rmse_init_R_weighted,
+                                           rmse_init_t_weighted,
+                                           rmse_final_R_weighted,
+                                           rmse_final_t_weighted
+                                           )
           )
     # Save RMSE values to a text file
     with open(outpath, "w") as rmse_txt_file:
@@ -379,6 +444,22 @@ def display_and_save_rmse(rmses, outpath):
         rmse_txt_file.write(
             "INITIAL WEIGHTED: {} \n".format(rmse_init_weighted))
         rmse_txt_file.write("FINAL WEIGHTED: {} \n".format(rmse_final_weighted))
+        rmse_txt_file.write(
+            "INITIAL UNWEIGHTED R: {} \n".format(rmse_init_R_unweighted))
+        rmse_txt_file.write(
+            "INITIAL UNWEIGHTED t: {} \n".format(rmse_init_t_unweighted))
+        rmse_txt_file.write(
+            "FINAL UNWEIGHTED R: {} \n".format(rmse_final_R_unweighted))
+        rmse_txt_file.write(
+            "FINAL UNWEIGHTED t: {} \n".format(rmse_final_t_unweighted))
+        rmse_txt_file.write(
+            "INITIAL WEIGHTED R: {} \n".format(rmse_init_R_weighted))
+        rmse_txt_file.write(
+            "INITIAL WEIGHTED t: {} \n".format(rmse_init_t_weighted))
+        rmse_txt_file.write(
+            "FINAL WEIGHTED R: {} \n".format(rmse_final_R_weighted))
+        rmse_txt_file.write(
+            "FINAL WEIGHTED t: {} \n".format(rmse_final_t_weighted))
         rmse_txt_file.close()
 
 def extract_variance(cov, mode="avg"):

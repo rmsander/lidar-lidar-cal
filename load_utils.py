@@ -1,7 +1,12 @@
-"""Script for loading data from our various pickle and CSV files."""
+#!/usr/bin/python3
 
+"""Functions for loading data from our various pickle and CSV files."""
+
+# Native Python imports
 import os
 import pickle
+
+# NumPy
 import numpy as np
 
 def load_pkl(f):
