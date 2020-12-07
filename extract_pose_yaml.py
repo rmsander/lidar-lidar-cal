@@ -1,4 +1,5 @@
 #!/usr/bin/python3
+
 """Script for finding relative pose between velodyne and the rest of the other sensors."""
 
 import numpy as np
@@ -182,9 +183,18 @@ def main():
               "T_{}^velodyne: \n{} \n".format(sensor, sensor, transformed_pose))
         print("DET: {}".format(np.linalg.det(transformed_pose_sensor_dict[sensor])))
 
+    # As a sanity check, compute front-to-rear
+    velodyne_front_pose = pose_sensor_dict['velodyne_front']
+    velodyne_rear_pose = pose_sensor_dict['velodyne_rear']
+    inv_velodyne_front_pose = construct_inv_pose(velodyne_front_pose)
+    transformed_pose_sensor_dict["direct_front_rear"] = inv_velodyne_front_pose @ velodyne_rear_pose
+
     # Save relative transforms to file
     out_file = "relative_transforms.pkl"
     save_transforms(out_file, transformed_pose_sensor_dict)
+
+
+
 
 
 if __name__ == '__main__':
