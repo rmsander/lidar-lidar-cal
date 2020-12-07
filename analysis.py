@@ -96,23 +96,30 @@ def main():
         rear_rot_cov_avg, rear_reject = parse_icp_cov(rear_odometry, type="rear",
                                                       reject_thr=REJECT_THR)
 
-    # Compute the covariance of translation and rotation (the latter uses Euler angles)
-    cov_t_main, cov_R_main = compute_weights_euler(main_odometry, type="main")
-    cov_t_front, cov_R_front = compute_weights_euler(front_odometry, type="front")
-    cov_t_rear, cov_R_rear = compute_weights_euler(rear_odometry, type="rear")
-
-    # Extract a single scalar using the average value from rotation and translation
-    var_t_main = extract_variance(cov_t_main, mode="avg")
-    var_R_main = extract_variance(cov_R_main, mode="avg")
-    var_t_front = extract_variance(cov_t_front, mode="avg")
-    var_R_front = extract_variance(cov_R_front, mode="avg")
-    var_t_rear = extract_variance(cov_t_main, mode="avg")
-    var_R_rear = extract_variance(cov_R_rear, mode="avg")
 
     # Calculate relative poses
-    main_rel_poses = relative_pose_processing.calc_rel_poses(main_aligned)
-    front_rel_poses = relative_pose_processing.calc_rel_poses(front_aligned)
-    rear_rel_poses = relative_pose_processing.calc_rel_poses(rear_aligned)
+    (main_aligned, main_rel_poses) = relative_pose_processing.calc_rel_poses(main_aligned)
+    (front_aligned, front_rel_poses) = relative_pose_processing.calc_rel_poses(front_aligned)
+    (rear_aligned, rear_rel_poses) = relative_pose_processing.calc_rel_poses(rear_aligned)
+
+
+    # Compute the covariance of translation and rotation (the latter uses Euler angles)
+    #cov_t_main, cov_R_main = compute_weights_euler(main_odometry, type="main")
+    #cov_t_front, cov_R_front = compute_weights_euler(front_odometry, type="front")
+    #cov_t_rear, cov_R_rear = compute_weights_euler(rear_odometry, type="rear")
+
+    cov_t_main, cov_R_main = compute_weights_euler(main_aligned, type="main")
+    cov_t_front, cov_R_front = compute_weights_euler(front_aligned, type="front")
+    cov_t_rear, cov_R_rear = compute_weights_euler(rear_aligned, type="rear")
+
+    # Extract a single scalar using the average value from rotation and translation
+    var_t_main = extract_variance(cov_t_main, mode="max")
+    var_R_main = extract_variance(cov_R_main, mode="max")
+    var_t_front = extract_variance(cov_t_front, mode="max")
+    var_R_front = extract_variance(cov_R_front, mode="max")
+    var_t_rear = extract_variance(cov_t_main, mode="max")
+    var_R_rear = extract_variance(cov_R_rear, mode="max")
+
 
     # Optimization (1) Instantiate a manifold
     translation_manifold = Euclidean(3)  # Translation vector

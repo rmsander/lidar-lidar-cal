@@ -77,7 +77,8 @@ int main (int argc, char** argv) {
     }
         
 
-    Eigen::Matrix4d T_front_main = readMatrix4("velodyne_front.txt");
+    Eigen::Matrix4d T_front_main = readMatrix4("velodyne_front_optimized2.txt");
+    //Eigen::Matrix4d T_front_main = readMatrix4("velodyne_front_optimized.txt");
     
     pcl::PointCloud<pcl::PointXYZ>::Ptr full_cloud_main (new pcl::PointCloud<pcl::PointXYZ>);
     pcl::PointCloud<pcl::PointXYZ>::Ptr full_cloud_front (new pcl::PointCloud<pcl::PointXYZ>);
@@ -120,23 +121,24 @@ int main (int argc, char** argv) {
 
         (*full_cloud_front) += (*transformed_cloud_front);
 
-        if ( (ix > 0) && (ix % 30 == 0)) {
-            char main_out_buff[100];
-            snprintf(main_out_buff, sizeof(main_out_buff), "main_clouds/pc_%05d_vox_%.2f.pcd", ix, voxel_size);
-            std::string main_out = main_out_buff;
-            char front_out_buff[100];
-            snprintf(front_out_buff, sizeof(front_out_buff), "front_clouds/pc_%05d_vox_%.2f.pcd", ix, voxel_size);
-            std::string front_out = front_out_buff;
+        //was used to generate sweep
+        //if ( (ix > 0) && (ix % 30 == 0)) {
+        //    char main_out_buff[100];
+        //    snprintf(main_out_buff, sizeof(main_out_buff), "main_clouds/pc_%05d_vox_%.2f.pcd", ix, voxel_size);
+        //    std::string main_out = main_out_buff;
+        //    char front_out_buff[100];
+        //    snprintf(front_out_buff, sizeof(front_out_buff), "front_clouds/pc_%05d_vox_%.2f.pcd", ix, voxel_size);
+        //    std::string front_out = front_out_buff;
 
-            filterAndPrint(main_out, full_cloud_main, voxel_size);
-            filterAndPrint(front_out, full_cloud_front, voxel_size);
-        }
+        //    filterAndPrint(main_out, full_cloud_main, voxel_size);
+        //    filterAndPrint(front_out, full_cloud_front, voxel_size);
+        //}
 
     }
 
-    std::string fn_main = "main_out.pcd";
-    std::string fn_front = "front_out.pcd";
-    filterAndPrint(fn_main, full_cloud_main, voxel_size);
+    //std::string fn_main = "main_out.pcd";
+    std::string fn_front = "front_clouds/front_out_opt2_calibration.pcd";
+    //filterAndPrint(fn_main, full_cloud_main, voxel_size);
     filterAndPrint(fn_front, full_cloud_front, voxel_size);
 
   return (0);

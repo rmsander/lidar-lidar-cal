@@ -198,6 +198,9 @@ def cost(X, A, B, r, rho, omega, weighted):
     Returns:
         cost (float):  The total cost computed over the sets of poses.
     """
+
+    rho = 1./rho
+    omega = 1./omega
     # Initialize cost
     cost = 0
 
@@ -375,11 +378,12 @@ def compute_weights_euler(odom_df, type="main"):
         R (np.array): 3x3 rotation matrix extra
     """
     # Compute translations and compute covariance over all of them
-    t = odom_df[["x", "y", "z"]].values  # Translation - with shape (N, 3)
+    print(list(odom_df.columns.values))
+    t = odom_df[["dx", "dy", "dz"]].values  # Translation - with shape (N, 3)
     cov_t = np.cov(t.T)
 
     # Extract quaternions from odometric data frame
-    Q = odom_df[["qx", "qy", "qz", "qw"]].values
+    Q = odom_df[["dqx", "dqy", "dqz", "dqw"]].values
 
     # Convert quaternions to euler angles
     E = np.zeros((Q.shape[0], 3))  # RPY angles array

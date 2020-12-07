@@ -56,6 +56,9 @@ def calc_rel_poses(df):
     dqx = df.dqx.values
     dqy = df.dqy.values
     dqz = df.dqz.values
+    dx_vals = [0]
+    dy_vals = [0]
+    dz_vals = [0]
     T_homg_list = []
     for ix in range(len(x) - 1):
         T_homg = np.zeros((4, 4))
@@ -64,14 +67,22 @@ def calc_rel_poses(df):
         dx = x[ix + 1] - x[ix]
         dy = y[ix + 1] - y[ix]
         dz = z[ix + 1] - z[ix]
+
+        dx_vals.append(dx)
+        dy_vals.append(dy)
+        dz_vals.append(dz)
+
         T_homg[:3, :3] = rot
         T_homg[0, 3] = dx
         T_homg[1, 3] = dy
         T_homg[2, 3] = dz
         T_homg[3, 3] = 1
         T_homg_list.append(T_homg)
+    df['dx'] = np.array(dx_vals)
+    df['dy'] = np.array(dy_vals)
+    df['dz'] = np.array(dz_vals)
 
-    return T_homg_list
+    return (df, T_homg_list)
 
 
 def process_df(fn):
