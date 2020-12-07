@@ -12,13 +12,13 @@ bool front_done = false;
 bool rear_done = false;
 
 void callback(std::string name, const PointCloud::ConstPtr& msg) {
-  if (name == "pc_main.pcd"){
+  if (name.find("pc_main.pcd") != std::string::npos){
     if (main_done) return;
     main_done = true;
-  } else if (name == "pc_front.pcd") {
+  } else if (name.find("pc_front.pcd") != std::string::npos){
     if (front_done) return;
     front_done = true;
-  } else if (name == "pc_rear.pcd") {
+  } else if (name.find("pc_rear.pcd") != std::string::npos){
     if (rear_done) return;
     rear_done = true;
   } else {
@@ -34,12 +34,18 @@ void callback(std::string name, const PointCloud::ConstPtr& msg) {
 }
 
 int main(int argc, char** argv) {
+  std::string prefix;
+  if (argc > 1){
+    prefix = argv[1];
+  } else {
+    prefix = "";
+  }
   ros::init(argc, argv, "sub_pcl");
   ros::NodeHandle nh;
   //ros::Subscriber sub = nh.subscribe<PointCloud>("/octo_main/octomap_point_cloud_centers", 1, callback);
-  std::string name_main = "pc_main.pcd";
-  std::string name_front = "pc_front.pcd";
-  std::string name_rear = "pc_rear.pcd";
+  std::string name_main = prefix + "pc_main.pcd";
+  std::string name_front = prefix + "pc_front.pcd";
+  std::string name_rear = prefix + "pc_rear.pcd";
   ros::Subscriber sub_main = nh.subscribe<PointCloud>("/octo_main/octomap_point_cloud_centers", 1, [name_main](const PointCloud::ConstPtr& msg){callback(name_main, msg);});
   ros::Subscriber sub_front = nh.subscribe<PointCloud>("/octo_front/octomap_point_cloud_centers", 1, [name_front](const PointCloud::ConstPtr& msg){callback(name_front, msg);});
   ros::Subscriber sub_rear = nh.subscribe<PointCloud>("/octo_rear/octomap_point_cloud_centers", 1, [name_rear](const PointCloud::ConstPtr& msg){callback(name_rear, msg);});
