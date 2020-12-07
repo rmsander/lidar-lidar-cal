@@ -127,9 +127,6 @@ class CustomSteepestDescent(SteepestDescent):
                     print('')
                 break
 
-            if iter > 5:
-                break
-
         if self._logverbosity <= 0:
             return x
         else:
