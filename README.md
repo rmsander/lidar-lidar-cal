@@ -64,3 +64,40 @@ pcl_viewer pc_main.pcd pc_front.pcd pc_rear.pcd
 ```
 The former command displays the clouds separately, and the latter displays them
 on top of each other.
+
+Relative Pose Estimation and Analysis
+===================
+To estimate relative poses between the lidar frames, we use `pymanopt` for running
+iterative gradient-based optimizations to estimate relative pose transformations
+that minimize the distance to the observed pose transformations.  
+
+To run this analysis, run: 
+```
+python3 analysis.py
+```
+This will:
+
+1. Estimate the relative pose transformation between:
+(i) `velodyne` and `velodyne_front`, (ii) `velodyne` and `velodyne_rear`, and
+(iii)) `velodyne_front` and `velodyne_rear`.  These estimates are provided an
+initial guess given by the configuration file `husky4_sensors.yaml`, from which
+we have extracted relative pose transformations between frames.
+
+2. Save the final estimates of these relative pose transformations, represented
+as 4 x 4 matrices, to the directory `final_estimates_unweighted_{True, False}`,
+where the suffix of this directory depends on whether you use weighted estimates
+to optimize the system (a flag in `analysis.py`).
+
+3. Compute the Root Mean Squared Error (RMSE) of the relative (i) pose transformation,
+(ii) rotation, and (iii) translation.  This is carried out for both the initial and 
+final estimates.  These results for each pairwise combination of sensors can be
+found under `analysis_results_unweighted_{True, False}`, again depending on whether
+or not the samples are weighted during training.
+
+4. Generate plots of the odometry for all three sensors.
+
+5. Generate plots of the ICP covariance diagonal elements over time for each sensor.
+These are saved in `icp_plots/` (or `icp_plots_clipped`), if the maximum value
+is clipped.
+
+Utility functions for running the script in `analysis.py` can be found in `analysis_utils.py`.
