@@ -420,7 +420,7 @@ def display_and_save_rmse(rmses, outpath):
           "  INITIAL WEIGHTED R: {} \n"
           "  INITIAL WEIGHTED t: {} \n"
           "  FINAL WEIGHTED R: {} \n"
-          "  FINAL WEIGHTED T: {} \n".format(rmse_init_unweighted,
+          "  FINAL WEIGHTED t: {} \n".format(rmse_init_unweighted,
                                            rmse_final_unweighted,
                                            rmse_init_weighted,
                                            rmse_final_weighted,

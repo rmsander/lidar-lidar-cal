@@ -26,7 +26,7 @@ from analysis_utils import cost, parse_icp_cov, plot_all_odom, plot_covs, \
 REJECT_THR = 100
 
 # Whether to weight our estimate
-WEIGHTED = False
+WEIGHTED = True
 
 # Specify odometry CSV file paths
 MAIN_ODOM_CSV = 'main_odometry_clean.csv'
