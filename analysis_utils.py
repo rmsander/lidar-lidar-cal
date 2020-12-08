@@ -176,7 +176,7 @@ def parse_icp_cov(odom_df, type="main", reject_thr=100):
            trans_cov_avg, rot_cov, rot_cov_max, rot_cov_avg, reject
 
 
-def cost(X, A, B, r, rho, omega, weighted):
+def cost(X, A, B, r, rho, omega, weighted, t_start=None, t_end=None):
     """Function to compute the cost between two sets of poses given by the
     lists A and B.  This cost function is passed in as a parameter to the
     manifold SE(3) manifold optimization.
@@ -194,6 +194,11 @@ def cost(X, A, B, r, rho, omega, weighted):
         rho (float):  Float corresponding to the variance weighting for translation.
         omega (float):  Float corresponding to the variance weighting for translation.
         weighted (bool):  Whether or not to weight the estimates.
+        t_start (int):  If provided, the frame to start the optimization at.
+            If None (default), defaults to zero/the starting frames of A and B.
+        t_end (int):  If provided, the frame to end the optimization at.
+            If None (default), defaults to zero/the starting frames of A and B.
+            Note that this doesn't include the final frame provided.
 
     Returns:
         cost (float):  The total cost computed over the sets of poses.
@@ -212,8 +217,17 @@ def cost(X, A, B, r, rho, omega, weighted):
     T4 = np.array([0, 0, 0, 1])  # Use 1 in last entry for homogeneous coordinates
     Tab = np.vstack((R_t, T4))  # Merge 3 x 4 with 1 x 4 to get pose
 
-    # Sum the cost over all poses
-    for ix in range(len(A)):
+    # Determine range of poses to optimize over
+    if t_start is None:  # No starting frame provided
+        t_start = 0
+    if t_end is None:  # No ending frame provided
+        t_end = len(A)
+
+    # Check that number of poses is the same in A and B
+    assert len(A) == len(B)
+
+    # Sum the cost over poses selected within range
+    for ix in range(t_start, t_end):
         if weighted:  # Compute a weighted estimate
             if not r[ix]:  # If we don't reject the sample, compute cost
                 M = B[ix] @ Tab @ np.linalg.inv(A[ix]) - Tab

@@ -58,7 +58,7 @@ def convert_to_txt():
     try:
         # Take paths from pkl
         path_main_front = os.path.join("analysis_results", "estimates_main_front.pkl")
-        path_main_rear = os.path.join("analysis_results", "estimates_main_rear.pkl"
+        path_main_rear = os.path.join("analysis_results", "estimates_main_rear.pkl")
         path_front_rear = os.path.join("analysis_results", "estimates_front_rear.pkl")
 
         # Save them to text path
@@ -69,6 +69,16 @@ def convert_to_txt():
     except:
         print("PATH NOT FOUND")
 
+def check_dir(dir_path):
+    """Function to check whether a given input path is a valid directory.
 
+    Parameters:
+        dir_path (str):  String denoting the path to check directory status. If
+            the provided path is not a directory, then the directory is created
+            as a sub-directory of the current path.
+    """
+    if not os.path.exists(dir_path):
+        os.makedirs(dir_path, exist_ok=True)
+        print("Directory created: {}".format(dir_path))
 
 

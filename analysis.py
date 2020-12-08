@@ -15,18 +15,23 @@ from pymanopt.manifolds import Euclidean, Rotations, Product
 from pymanopt import Problem
 from custom_solver import CustomSteepestDescent
 
-# Custom import
+# Custom imports
 import relative_pose_processing
 from extract_pose_yaml import load_transforms, construct_pose
 from analysis_utils import cost, parse_icp_cov, plot_all_odom, plot_covs, \
     plot_error, compute_weights_euler, extract_variance, compute_rmse_weighted, \
     compute_rmse_unweighted, display_and_save_rmse
+from load_utils import check_dir
 
-# For rejecting samples if the ICP covariance is too high
-REJECT_THR = 100
+# Cross-validation
+from sklearn.model_selection import KFold
 
-# Whether to weight our estimate
-WEIGHTED = True
+##### FLAGS #####
+REJECT_THR = 100  # For rejecting samples if the ICP covariance is too high
+FOLDS = 10  # Cross-validation splits
+WEIGHTED = True  # Whether to weight our estimate
+USE_CROSS_VAL = True  # Flag to denote whether we use cross-validation
+#################
 
 # Specify odometry CSV file paths
 MAIN_ODOM_CSV = 'main_odometry_clean.csv'
@@ -37,19 +42,21 @@ REAR_ODOM_CSV = 'rear_odometry_clean.csv'
 PKL_POSES_PATH = 'relative_transforms.pkl'
 
 # Path for results from manifold optimization
-ANALYSIS_RESULTS_PATH = 'analysis_results_weighted_{}'.format(WEIGHTED)
-FINAL_ESTIMATES_PATH = 'final_estimates_weighted_{}'.format(WEIGHTED)
-ODOMETRY_PLOTS_PATH = 'odometry_plots_weighted_{}'.format(WEIGHTED)
+if USE_CROSS_VAL:
+    ANALYSIS_RESULTS_PATH = os.path.join('cross_validation',
+                                         'analysis_results_weighted_{}'.format(WEIGHTED))
+    FINAL_ESTIMATES_PATH = os.path.join('cross_validation',
+                                        'final_estimates_weighted_{}'.format(WEIGHTED))
+    ODOMETRY_PLOTS_PATH = os.path.join('cross_validation',
+                                       'odometry_plots_weighted_{}'.format(WEIGHTED))
+else:
+    ANALYSIS_RESULTS_PATH = 'analysis_results_weighted_{}'.format(WEIGHTED)
+    FINAL_ESTIMATES_PATH = 'final_estimates_weighted_{}'.format(WEIGHTED)
+    ODOMETRY_PLOTS_PATH = 'odometry_plots_weighted_{}'.format(WEIGHTED)
 
-# Create results directories
-if not os.path.exists(ANALYSIS_RESULTS_PATH):  # Where errors and all estimates are stored
-    os.mkdir(ANALYSIS_RESULTS_PATH)
-    
-if not os.path.exists(FINAL_ESTIMATES_PATH):  # Where estimates are stored
-    os.mkdir(FINAL_ESTIMATES_PATH)
-
-if not os.path.exists(ODOMETRY_PLOTS_PATH):  # Where odometry plots are saved
-    os.mkdir(ODOMETRY_PLOTS_PATH)
+# Check directories, and if they do not exist, make them
+for path in [ANALYSIS_RESULTS_PATH, FINAL_ESTIMATES_PATH, ODOMETRY_PLOTS_PATH]:
+    check_dir(path)
 
 def make_all_plots():
     """Function to create all plots from this analysis."""
@@ -67,6 +74,205 @@ def make_all_plots():
     plot_covs(main_rot_cov, main_trans_cov, lidar_type="Main", clip=True)
     plot_covs(front_rot_cov, front_trans_cov, lidar_type="Front", clip=True)
     plot_covs(rear_rot_cov, rear_trans_cov, lidar_type="Rear", clip=True)
+
+def cross_validation(odom_1, aligned_1, odom_2, aligned_2, type_1, type_2, K=10):
+    """Function to run cross-validation to determine the out-of-sample
+    performance of our framework."""
+
+    # Get ICP covariance matrices
+    # Odom 1 lidar odometry
+    odom1_icp, odom1_trans_cov, odom1_trans_cov_max, \
+    odom1_trans_cov_avg, odom1_rot_cov, odom1_rot_cov_max, \
+    odom1_rot_cov_avg, odom1_reject = parse_icp_cov(odom_1, type=type_1,
+                                                  reject_thr=REJECT_THR)
+
+    # Odom 2 lidar odometry
+    odom2_icp, odom2_trans_cov, odom2_trans_cov_max, \
+    odom2_trans_cov_avg, odom2_rot_cov, odom2_rot_cov_max, \
+    odom2_rot_cov_avg, odom2_reject = parse_icp_cov(odom_2, type=type_2,
+                                                    reject_thr=REJECT_THR)
+    # Calculate relative poses
+    (odom1_aligned, odom1_rel_poses) = relative_pose_processing.calc_rel_poses(aligned_1)
+    (odom2_aligned, odom2_rel_poses) = relative_pose_processing.calc_rel_poses(aligned_2)
+
+    # Compute weights for weighted estimate
+    cov_t_odom1, cov_R_odom1 = compute_weights_euler(odom1_aligned, type="odom1")
+    cov_t_odom2, cov_R_odom2 = compute_weights_euler(odom2_aligned, type="odom2")
+
+    # Extract a single scalar using the average value from rotation and translation
+    var_t_odom1 = extract_variance(cov_t_odom1, mode="max")
+    var_R_odom1 = extract_variance(cov_R_odom1, mode="max")
+    var_t_odom2 = extract_variance(cov_t_odom2, mode="max")
+    var_R_odom2 = extract_variance(cov_R_odom2, mode="max")
+
+
+    # Optimization (1) Instantiate a manifold
+    translation_manifold = Euclidean(3)  # Translation vector
+    so3 = Rotations(3)  # Rotation matrix
+    manifold = Product((so3, translation_manifold))  # Instantiate manifold
+
+    # Get initial guesses for our estimations
+    initial_poses = {}
+    if os.path.exists(PKL_POSES_PATH):  # Check to make sure path exists
+        transforms_dict = load_transforms(PKL_POSES_PATH)  # Relative transforms
+
+    # Map types to sensor names to access initial estimate relative transforms
+    types2sensors = {"main": "velodyne",
+                     "front": "front",
+                     "rear": "rear"}
+
+    # Now get initial guesses from the relative poses
+    initial_guess_odom1_odom2 = transforms_dict["{}_{}".format(types2sensors[type_1],
+                                                               types2sensors[type_2])]
+    # Print out all the initial estimates as poses
+    print("INITIAL GUESS {} {}: \n {} \n".format(types2sensors[type_1],
+                                                 types2sensors[type_2],
+                                                 initial_guess_odom1_odom2))
+
+    # Get rotation matrices for initial guesses
+    R0_odom1_odom2, t0_odom1_odom2 = initial_guess_odom1_odom2[:3, :3], \
+                                     initial_guess_odom1_odom2[:3, 3]
+    X0_odom1_odom2 = (R0_odom1_odom2, t0_odom1_odom2)  # Pymanopt estimate
+    print("INITIAL GUESS {} {}: \n R0: \n {} \n\n t0: \n {} \n".format(
+        types2sensors[type_1], types2sensors[type_2], R0_odom1_odom2, t0_odom1_odom2))
+
+    # Create an object to get training/validation indices
+    kf = KFold(n_splits=K, random_state=None, shuffle=False)
+    k = 0
+
+    # Dataset
+    A = np.array(odom2_rel_poses)  # First set of poses
+    B = np.array(odom1_rel_poses)  # Second set of poses
+    N = len(A)
+    assert len(A) == len(B)  # Sanity check to ensure odometry data matches
+    r = np.logical_or(np.array(odom1_reject)[:N], np.array(odom2_reject)[:N])  # Outlier rejection
+
+    # Iterate over 30 second intervals of the poses
+    for train_index, test_index in kf.split(A):  # Perform K-fold cross-validation
+
+        # Path for results from manifold optimization
+        analysis_results_path = os.path.join(ANALYSIS_RESULTS_PATH, "k={}".format(k))
+        final_estimates_path = os.path.join(FINAL_ESTIMATES_PATH, "k={}".format(k))
+        odometry_plots_path = os.path.join(ODOMETRY_PLOTS_PATH, "k={}".format(k))
+
+        # Make sure all paths exist - if they don't create them
+        for path in [analysis_results_path, final_estimates_path, odometry_plots_path]:
+            check_dir(path)
+
+        # Get training data
+        A_train = A[train_index]
+        B_train = B[train_index]
+        N_train = min(A_train.shape[0], B_train.shape[0])
+        r_train = r[train_index]
+        print("NUMBER OF TRAINING SAMPLES: {}".format(N_train))
+
+        omega = np.max([var_R_odom1, var_R_odom2])  # Take average across different odometries
+        rho = np.max([var_t_odom1, var_t_odom2])  # Take average across different odometries
+        ### PARAMETERS ###
+
+        cost_lambda = lambda x: cost(x, A_train, B_train, r_train, rho, omega, WEIGHTED)
+        problem = Problem(manifold=manifold, cost=cost_lambda)  # (2a) Compute the optimization between odom1 and odom2
+        solver = CustomSteepestDescent()  # (3) Instantiate a Pymanopt solver
+        X_opt = solver.solve(problem, x=X0_odom1_odom2)
+        print("Initial Guess for Main-Front Transformation: \n {}".format(initial_guess_odom1_odom2))
+        print("Optimal solution between {} and {} "
+              "reference frames: \n {}".format(types2sensors[type_1],
+                                               types2sensors[type_2],
+                                               X_opt))
+
+        # Take intermediate values for plotting
+        estimates_x = solver.estimates
+        errors = solver.errors
+        iters = solver.iterations
+
+        # Metrics dictionary
+        estimates_dict = {i: T for i, T in zip(iters, estimates_x)}
+        error_dict = {i: e for i, e in zip(iters, errors)}
+
+        # Save intermediate results to a pkl file
+        estimates_fname = os.path.join(analysis_results_path, "estimates_{}_{}.pkl".format(types2sensors[type_1],
+                                               types2sensors[type_2],
+                                               X_opt))
+        error_fname = os.path.join(analysis_results_path, "error_{}_{}.pkl".format(types2sensors[type_1],
+                                               types2sensors[type_2],
+                                               X_opt))
+
+        # Save estimates to pickle file
+        with open(estimates_fname, "wb") as pkl_estimates:
+            pickle.dump(estimates_dict, pkl_estimates)
+            pkl_estimates.close()
+
+        # Save error to pickle file
+        with open(error_fname, "wb") as pkl_error:
+            pickle.dump(error_dict, pkl_error)
+            pkl_error.close()
+
+        # Calculate difference between initial guess and final
+        X_opt_T = construct_pose(X_opt[0], X_opt[1].reshape((3, 1)))
+        print("DIFFERENCE IN MATRICES: \n {}".format(
+            np.subtract(X_opt_T, initial_guess_odom1_odom2)))
+
+        # Compute the weighted and unweighted RMSE (training/in-sample)
+        train_rmse_init_weighted, train_rmse_final_weighted, train_rmse_init_R_weighted, \
+        train_rmse_init_t_weighted, train_rmse_final_R_weighted, \
+        train_rmse_final_t_weighted = compute_rmse_weighted(
+            initial_guess_odom1_odom2, X_opt_T, A_train, B_train, rho, omega)
+        train_rmse_init_unweighted, train_rmse_final_unweighted, train_rmse_init_R_unweighted, \
+        train_rmse_init_t_unweighted, train_rmse_final_R_unweighted, \
+        train_rmse_final_t_unweighted = compute_rmse_unweighted(
+            initial_guess_odom1_odom2, X_opt_T, A_train, B_train)
+        train_rmses = [train_rmse_init_unweighted, train_rmse_final_unweighted,
+                      train_rmse_init_weighted, train_rmse_final_weighted,
+                      train_rmse_init_R_unweighted, train_rmse_init_t_unweighted,
+                      train_rmse_final_R_unweighted,
+                      train_rmse_final_t_unweighted,
+                      train_rmse_init_R_weighted, train_rmse_init_t_weighted,
+                      train_rmse_final_R_weighted, train_rmse_final_t_weighted]
+
+        # Display and save RMSEs
+        outpath = os.path.join(analysis_results_path,
+                               "train_rmse_{}_{}.txt".format(
+                                   types2sensors[type_1],
+                                   types2sensors[type_2]))
+        display_and_save_rmse(train_rmses, outpath)
+
+        # Get test data
+        A_test = A[test_index]
+        B_test = B[test_index]
+        N_test = min(A_test.shape[0], B_test.shape[0])
+        print("NUMBER OF TRAINING SAMPLES: {}".format(N_test))
+
+        # Compute the weighted and unweighted RMSE (testing/out-of-sample)
+        test_rmse_init_weighted, test_rmse_final_weighted, test_rmse_init_R_weighted, \
+        test_rmse_init_t_weighted, test_rmse_final_R_weighted, \
+        test_rmse_final_t_weighted = compute_rmse_weighted(initial_guess_odom1_odom2,
+                                                            X_opt_T, A_test, B_test, rho,
+                                                            omega)
+        test_rmse_init_unweighted, test_rmse_final_unweighted, test_rmse_init_R_unweighted, \
+        test_rmse_init_t_unweighted, test_rmse_final_R_unweighted, \
+        test_rmse_final_t_unweighted = compute_rmse_unweighted(initial_guess_odom1_odom2,
+                                                                X_opt_T, A_test, B_test)
+        test_rmses = [test_rmse_init_unweighted, test_rmse_final_unweighted,
+                 test_rmse_init_weighted, test_rmse_final_weighted,
+                 test_rmse_init_R_unweighted, test_rmse_init_t_unweighted,
+                 test_rmse_final_R_unweighted, test_rmse_final_t_unweighted,
+                 test_rmse_init_R_weighted, test_rmse_init_t_weighted,
+                 test_rmse_final_R_weighted, test_rmse_final_t_weighted]
+
+        # Display and save RMSEs
+        outpath = os.path.join(analysis_results_path,
+                               "test_rmse_{}_{}.txt".format(types2sensors[type_1],
+                                                       types2sensors[type_2]))
+        display_and_save_rmse(test_rmses, outpath)
+
+        # Save final estimates
+        final_estimate_outpath = os.path.join(final_estimates_path,
+                                              "{}_{}.txt".format(types2sensors[type_1],
+                                                                      types2sensors[type_2]))
+        np.savetxt(final_estimate_outpath, X_opt_T)
+
+        # Finally, increment k
+        k += 1
 
 def main():
     # Extract and process the CSVs
@@ -101,12 +307,6 @@ def main():
     (main_aligned, main_rel_poses) = relative_pose_processing.calc_rel_poses(main_aligned)
     (front_aligned, front_rel_poses) = relative_pose_processing.calc_rel_poses(front_aligned)
     (rear_aligned, rear_rel_poses) = relative_pose_processing.calc_rel_poses(rear_aligned)
-
-
-    # Compute the covariance of translation and rotation (the latter uses Euler angles)
-    #cov_t_main, cov_R_main = compute_weights_euler(main_odometry, type="main")
-    #cov_t_front, cov_R_front = compute_weights_euler(front_odometry, type="front")
-    #cov_t_rear, cov_R_rear = compute_weights_euler(rear_odometry, type="rear")
 
     cov_t_main, cov_R_main = compute_weights_euler(main_aligned, type="main")
     cov_t_front, cov_R_front = compute_weights_euler(front_aligned, type="front")
@@ -166,8 +366,8 @@ def main():
     B = np.array(main_rel_poses)  # Second set of poses
     N = min(A.shape[0], B.shape[0])
     r = np.logical_or(np.array(main_reject[:N]), np.array(front_reject[:N]))  # If either has high variance, reject the sample
-    omega = np.mean([var_R_main, var_R_front])  # Take average across different odometries
-    rho = np.mean([var_t_main, var_t_front])  # Take average across different odometries
+    omega = np.max([var_R_main, var_R_front])  # Take average across different odometries
+    rho = np.max([var_t_main, var_t_front])  # Take average across different odometries
     ### PARAMETERS ###
 
     cost_main_front = lambda x: cost(x, A, B, r, rho, omega, WEIGHTED)
@@ -239,8 +439,8 @@ def main():
     B = np.array(main_rel_poses)  # Second set of poses
     N = min(A.shape[0], B.shape[0])
     r = np.logical_or(np.array(main_reject[:N]), np.array(rear_reject[:N]))  # If either has high variance, reject the sample
-    omega = np.mean([var_R_main, var_R_rear])  # Take average across different odometries
-    rho = np.mean([var_t_main, var_t_rear])  # Take average across different odometries
+    omega = np.max([var_R_main, var_R_rear])  # Take average across different odometries
+    rho = np.max([var_t_main, var_t_rear])  # Take average across different odometries
     ### PARAMETERS ###
 
     cost_main_rear = lambda x: cost(x, A, B, r, rho, omega, WEIGHTED)
@@ -311,8 +511,8 @@ def main():
     B = np.array(front_rel_poses)  # Second set of poses
     N = min(A.shape[0], B.shape[0])
     r = np.logical_or(np.array(front_reject[:N]), np.array(rear_reject[:N]))  # If either has high variance, reject the sample
-    omega = np.mean([var_R_front, var_R_rear])  # Take average across different odometries
-    rho = np.mean([var_t_front, var_t_rear])  # Take average across different odometries
+    omega = np.max([var_R_front, var_R_rear])  # Take average across different odometries
+    rho = np.max([var_t_front, var_t_rear])  # Take average across different odometries
     ### PARAMETERS ###
 
     cost_front_rear = lambda x: cost(x, A, B, r, rho, omega, WEIGHTED)
@@ -393,5 +593,48 @@ def main():
     print("Optimal solution between front and rear reference frames: \n {}".format(Xopt_front_rear))
     print("_________________________________________________________")
 
+
+def main_cross_val():
+    """Main function to run when using cross-validation."""
+    # Extract and process the CSVs
+    main_odometry = relative_pose_processing.process_df(MAIN_ODOM_CSV)
+    front_odometry = relative_pose_processing.process_df(FRONT_ODOM_CSV)
+    rear_odometry = relative_pose_processing.process_df(REAR_ODOM_CSV)
+
+    # Process poses
+    (main_aligned, front_aligned, rear_aligned) = \
+        relative_pose_processing.align_df([main_odometry,
+                                           front_odometry,
+                                           rear_odometry])
+
+    # Now pick pairwise combinations of poses and run cross-validation
+    odom_pairs = [(main_odometry, front_odometry),
+                  (main_odometry, rear_odometry),
+                  (front_odometry, rear_odometry)]
+    alignment_pairs = [(main_aligned, front_aligned),
+                       (main_aligned, rear_aligned),
+                       (front_aligned, rear_aligned)]
+    type_pairs = [("main", "front"),
+                  ("main", "rear"),
+                  ("front", "rear")]
+
+    # Iterate over pairwise combinations of lidars
+    for odom_pair, alignment_pair, type_pair in zip(odom_pairs, alignment_pairs, type_pairs):
+
+        # Decompose data
+        odom_1, odom_2 = odom_pair
+        aligned_1, aligned_2 = alignment_pair
+        type_1, type_2 = type_pair
+
+        # Display
+        print("RUNNING CROSS-VALIDATION FOR {} TO {} LIDAR".format(type_2,
+                                                                   type_1))
+        # Run cross-validation for each pair of lidars
+        cross_validation(odom_1, aligned_1, odom_2, aligned_2,
+                         type_1, type_2, K=FOLDS)
+
 if __name__ == '__main__':
-    main()
+    if USE_CROSS_VAL:  # Run cross-validation
+        main_cross_val()
+    else:
+        main()
