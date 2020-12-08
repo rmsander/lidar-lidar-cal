@@ -6,6 +6,7 @@ transformations between our lidar frames."""
 # Native Python imports
 import pickle
 import os
+import argparse
 
 # For autodiff with manifold optimization
 import autograd.numpy as np
@@ -25,38 +26,6 @@ from load_utils import check_dir
 
 # Cross-validation
 from sklearn.model_selection import KFold
-
-##### FLAGS #####
-REJECT_THR = 100  # For rejecting samples if the ICP covariance is too high
-FOLDS = 10  # Cross-validation splits
-WEIGHTED = True  # Whether to weight our estimate
-USE_CROSS_VAL = True  # Flag to denote whether we use cross-validation
-#################
-
-# Specify odometry CSV file paths
-MAIN_ODOM_CSV = 'main_odometry_clean.csv'
-FRONT_ODOM_CSV = 'front_odometry_clean.csv'
-REAR_ODOM_CSV = 'rear_odometry_clean.csv'
-
-# Specify path for relative transformations between poses
-PKL_POSES_PATH = 'relative_transforms.pkl'
-
-# Path for results from manifold optimization
-if USE_CROSS_VAL:
-    ANALYSIS_RESULTS_PATH = os.path.join('cross_validation',
-                                         'analysis_results_weighted_{}'.format(WEIGHTED))
-    FINAL_ESTIMATES_PATH = os.path.join('cross_validation',
-                                        'final_estimates_weighted_{}'.format(WEIGHTED))
-    ODOMETRY_PLOTS_PATH = os.path.join('cross_validation',
-                                       'odometry_plots_weighted_{}'.format(WEIGHTED))
-else:
-    ANALYSIS_RESULTS_PATH = 'analysis_results_weighted_{}'.format(WEIGHTED)
-    FINAL_ESTIMATES_PATH = 'final_estimates_weighted_{}'.format(WEIGHTED)
-    ODOMETRY_PLOTS_PATH = 'odometry_plots_weighted_{}'.format(WEIGHTED)
-
-# Check directories, and if they do not exist, make them
-for path in [ANALYSIS_RESULTS_PATH, FINAL_ESTIMATES_PATH, ODOMETRY_PLOTS_PATH]:
-    check_dir(path)
 
 def make_all_plots():
     """Function to create all plots from this analysis."""
@@ -147,6 +116,8 @@ def cross_validation(odom_1, aligned_1, odom_2, aligned_2, type_1, type_2, K=10)
     assert len(A) == len(B)  # Sanity check to ensure odometry data matches
     r = np.logical_or(np.array(odom1_reject)[:N], np.array(odom2_reject)[:N])  # Outlier rejection
 
+    print("NUMBER OF CROSS-VALIDATION FOLDS: {}".format(K))
+
     # Iterate over 30 second intervals of the poses
     for train_index, test_index in kf.split(A):  # Perform K-fold cross-validation
 
@@ -164,7 +135,7 @@ def cross_validation(odom_1, aligned_1, odom_2, aligned_2, type_1, type_2, K=10)
         B_train = B[train_index]
         N_train = min(A_train.shape[0], B_train.shape[0])
         r_train = r[train_index]
-        print("NUMBER OF TRAINING SAMPLES: {}".format(N_train))
+        print("FOLD NUMBER: {}, NUMBER OF TRAINING SAMPLES: {}".format(k, N_train))
 
         omega = np.max([var_R_odom1, var_R_odom2])  # Take average across different odometries
         rho = np.max([var_t_odom1, var_t_odom2])  # Take average across different odometries
@@ -240,7 +211,7 @@ def cross_validation(odom_1, aligned_1, odom_2, aligned_2, type_1, type_2, K=10)
         A_test = A[test_index]
         B_test = B[test_index]
         N_test = min(A_test.shape[0], B_test.shape[0])
-        print("NUMBER OF TRAINING SAMPLES: {}".format(N_test))
+        print("NUMBER OF TEST SAMPLES: {}".format(N_test))
 
         # Compute the weighted and unweighted RMSE (testing/out-of-sample)
         test_rmse_init_weighted, test_rmse_final_weighted, test_rmse_init_R_weighted, \
@@ -609,18 +580,16 @@ def main_cross_val():
 
     # Now pick pairwise combinations of poses and run cross-validation
     odom_pairs = [(main_odometry, front_odometry),
-                  (main_odometry, rear_odometry),
-                  (front_odometry, rear_odometry)]
+                  (main_odometry, rear_odometry)]
     alignment_pairs = [(main_aligned, front_aligned),
-                       (main_aligned, rear_aligned),
-                       (front_aligned, rear_aligned)]
+                       (main_aligned, rear_aligned)]
     type_pairs = [("main", "front"),
-                  ("main", "rear"),
-                  ("front", "rear")]
+                  ("main", "rear")]
 
     # Iterate over pairwise combinations of lidars
-    for odom_pair, alignment_pair, type_pair in zip(odom_pairs, alignment_pairs, type_pairs):
-
+    for odom_pair, alignment_pair, type_pair in zip(odom_pairs,
+                                                    alignment_pairs,
+                                                    type_pairs):
         # Decompose data
         odom_1, odom_2 = odom_pair
         aligned_1, aligned_2 = alignment_pair
@@ -629,11 +598,78 @@ def main_cross_val():
         # Display
         print("RUNNING CROSS-VALIDATION FOR {} TO {} LIDAR".format(type_2,
                                                                    type_1))
+        print("USING {} FOLDS".format(FOLDS))
         # Run cross-validation for each pair of lidars
         cross_validation(odom_1, aligned_1, odom_2, aligned_2,
                          type_1, type_2, K=FOLDS)
 
+def parse_args():
+    """Command-line argument parser.
+
+    Returns:
+        args: A parsed arguments object.
+    """
+    # Create argument parser
+    parser = argparse.ArgumentParser()
+
+    # Add arguments
+    parser.add_argument("-thr", "--reject_threshold", type=int, default=100,
+                        help="Value of maximum ICP diagonal with which to reject"
+                             "a sample.")
+    parser.add_argument("-kfolds", "--kfolds", type=int, default=10,
+                        help="If cross-validation is enabled, this is the number "
+                             "of cross-validation folds to use for it.")
+    parser.add_argument("-use_xval", "--use_xval", action="store_true",
+                         help="Whether to use cross-validation.")
+    parser.add_argument("-weighted", "--weighted", action="store_true",
+                        help="Whether to use weighted optimization to account"
+                             "for noise in rotation and translation.")
+
+    # Parse args and return them
+    return parser.parse_args()
+
 if __name__ == '__main__':
+
+    # Parse args
+    args = parse_args()
+    print("ARGUMENT CONFIGURATION: {}".format(args))
+
+    ##### FLAGS #####
+    REJECT_THR = args.reject_threshold  # For rejecting samples if the ICP covariance is too high
+    FOLDS = args.kfolds  # Cross-validation splits
+    WEIGHTED = args.weighted  # Whether to weight our estimate
+    USE_CROSS_VAL = args.use_xval  # Flag to denote whether we use cross-validation
+    #################
+
+    # Specify odometry CSV file paths
+    MAIN_ODOM_CSV = 'main_odometry_clean.csv'
+    FRONT_ODOM_CSV = 'front_odometry_clean.csv'
+    REAR_ODOM_CSV = 'rear_odometry_clean.csv'
+
+    # Specify path for relative transformations between poses
+    PKL_POSES_PATH = 'relative_transforms.pkl'
+
+    # Path for results from manifold optimization
+    if USE_CROSS_VAL:
+        ANALYSIS_RESULTS_PATH = os.path.join(
+            'cross_validation_folds={}'.format(FOLDS),
+            'analysis_results_weighted_{}'.format(WEIGHTED))
+        FINAL_ESTIMATES_PATH = os.path.join(
+            'cross_validation_folds={}'.format(FOLDS),
+            'final_estimates_weighted_{}'.format(WEIGHTED))
+        ODOMETRY_PLOTS_PATH = os.path.join(
+            'cross_validation_folds={}'.format(FOLDS),
+            'odometry_plots_weighted_{}'.format(WEIGHTED))
+    else:
+        ANALYSIS_RESULTS_PATH = 'analysis_results_weighted_{}'.format(WEIGHTED)
+        FINAL_ESTIMATES_PATH = 'final_estimates_weighted_{}'.format(WEIGHTED)
+        ODOMETRY_PLOTS_PATH = 'odometry_plots_weighted_{}'.format(WEIGHTED)
+
+    # Check directories, and if they do not exist, make them
+    for path in [ANALYSIS_RESULTS_PATH, FINAL_ESTIMATES_PATH,
+                 ODOMETRY_PLOTS_PATH]:
+        check_dir(path)
+
     if USE_CROSS_VAL:  # Run cross-validation
         main_cross_val()
     else:

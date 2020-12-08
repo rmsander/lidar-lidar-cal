@@ -73,8 +73,19 @@ that minimize the distance to the observed pose transformations.
 
 To run this analysis, run: 
 ```
-python3 analysis.py
+python3 analysis.py --weighted --use_xval --reject_threshold 100 --kfolds 10
 ```
+Where the command-line parameters are given by:
+1. `weighted`: Whether to use weighted optimization to account for noise in rotation and translation.
+
+2. `reject_threshold`: Value of maximum ICP diagonal with which to reject a sample.
+
+3. `kfolds`: If cross-validation is enabled, this is the number of 
+cross-validation folds to use for it.
+
+4. `use_xval`: Whether to use cross-validation when fitting the model and 
+calculating relative pose estimates.
+
 This will:
 
 1. Estimate the relative pose transformation between:
@@ -99,5 +110,8 @@ or not the samples are weighted during training.
 5. Generate plots of the ICP covariance diagonal elements over time for each sensor.
 These are saved in `icp_plots/` (or `icp_plots_clipped`), if the maximum value
 is clipped.
+
+6. If cross-validation is enabled, the results will be stored in a new (or existing)
+directory given by `./cross_validation_folds=K`, where `K` is the number of folds.
 
 Utility functions for running the script in `analysis.py` can be found in `analysis_utils.py`.
