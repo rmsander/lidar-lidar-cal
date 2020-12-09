@@ -26,8 +26,6 @@ void callback(std::string name, const PointCloud::ConstPtr& msg) {
   }
 
   printf ("Cloud: width = %d, height = %d\n", msg->width, msg->height);
-  //BOOST_FOREACH (const pcl::PointXYZ& pt, msg->points)
-  //  printf ("\t(%f, %f, %f)\n", pt.x, pt.y, pt.z);
   pcl::io::savePCDFileASCII (name, *msg);
   std::cerr << "Saved " << msg->size() << " data points to file." << std::endl;
 
@@ -42,7 +40,6 @@ int main(int argc, char** argv) {
   }
   ros::init(argc, argv, "sub_pcl");
   ros::NodeHandle nh;
-  //ros::Subscriber sub = nh.subscribe<PointCloud>("/octo_main/octomap_point_cloud_centers", 1, callback);
   std::string name_main = prefix + "pc_main.pcd";
   std::string name_front = prefix + "pc_front.pcd";
   std::string name_rear = prefix + "pc_rear.pcd";

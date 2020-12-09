@@ -22,8 +22,6 @@ bool pc_rear_ready = false;
 tf2_ros::Buffer tfBuffer;
 
 void pc_callback(std::string name, const PointCloud::ConstPtr& msg) {
-//void pc_callback(const PointCloud::ConstPtr& msg) {
-    //std::string name = "cat";
   
   printf ("Cloud: width = %d, height = %d\n", msg->width, msg->height);
   if (name == "main") {
@@ -103,9 +101,6 @@ int main(int argc, char** argv) {
     ros::Timer save_timer = nh.createTimer(ros::Duration(1./2.), pcd_save_callback);
 
     ros::spin();
-    //while (ros::ok()) {
-    //    ros::spinOnce();
-    //}
 }
 
 
