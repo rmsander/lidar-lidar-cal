@@ -138,13 +138,13 @@ include_directories(
 # add_executable(${PROJECT_NAME}_node src/final_node.cpp)
 add_executable(save_octomap_cloud src/save_octomap.cpp)
 
-add_executable(analyze_clouds src/analyze_clouds.cpp)
 
 add_executable(ros_to_pcds src/ros_to_pcds.cpp)
 
-add_executable(build_and_analyze src/build_and_analyze.cpp)
-add_executable(analyze_final src/analyze_final.cpp)
-add_executable(build_perturbed src/build_perturbed.cpp)
+add_executable(build_and_analyze src/build_and_analyze.cpp src/utils.cpp)
+add_executable(analyze_perturbed src/analyze_perturbed.cpp src/utils.cpp)
+add_executable(build_perturbed src/build_perturbed.cpp src/utils.cpp)
+add_executable(analyze_single src/analyze_single.cpp src/utils.cpp)
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -161,11 +161,11 @@ target_link_libraries(save_octomap_cloud
   ${catkin_LIBRARIES}
 )
 target_link_libraries(save_octomap_cloud ${catkin_LIBRARIES})
-target_link_libraries(analyze_clouds ${catkin_LIBRARIES})
 target_link_libraries(ros_to_pcds ${catkin_LIBRARIES})
 target_link_libraries(build_and_analyze ${catkin_LIBRARIES})
-target_link_libraries(analyze_final ${catkin_LIBRARIES})
+target_link_libraries(analyze_perturbed ${catkin_LIBRARIES})
 target_link_libraries(build_perturbed ${catkin_LIBRARIES})
+target_link_libraries(analyze_single ${catkin_LIBRARIES})
 
 #############
 ## Install ##
