@@ -10,20 +10,17 @@
 
 int main (int argc, char** argv) {
 
-    int start_scan = 0;
-    int end_scan = 50;
-    int n_scans = 589;
-    if (argc > 2) {
-        start_scan = atoi(argv[1]);
-        end_scan = atoi(argv[2]);
+    if (argc != 7) {
+        std::cout << "Wrong arguments! Call with: ./build_and_analyze start_ix end_ix voxel_size matrix_file output_name_main output_name_front" << std::endl;
     }
-    double voxel_size = 0.03;
-    if (argc > 3) {
-        voxel_size = std::stof(argv[3]);
-    }
-        
+    int start_scan = atoi(argv[1]);
+    int end_scan = atoi(argv[2]);
+    double voxel_size = std::stof(argv[3]);
+    char* matrix_file = argv[4];
+    std::string output_name_front = argv[5];
+    std::string output_name_main = argv[6];
 
-    Eigen::Matrix4d T_front_main = readMatrix4("velodyne_front_optimized2.txt");
+    Eigen::Matrix4d T_front_main = readMatrix4(matrix_file);
     //Eigen::Matrix4d T_front_main = readMatrix4("velodyne_front_optimized.txt");
     
     pcl::PointCloud<pcl::PointXYZ>::Ptr full_cloud_main (new pcl::PointCloud<pcl::PointXYZ>);
@@ -83,9 +80,9 @@ int main (int argc, char** argv) {
     }
 
     //std::string fn_main = "main_out.pcd";
-    std::string fn_front = "front_clouds/front_out_opt2_calibration.pcd";
-    //filterAndPrint(fn_main, full_cloud_main, voxel_size);
-    filterAndPrint(fn_front, full_cloud_front, voxel_size);
+    //std::string fn_front = "front_clouds/front_out_opt2_calibration.pcd";
+    filterAndPrint(output_name_main, full_cloud_main, voxel_size);
+    filterAndPrint(output_name_front, full_cloud_front, voxel_size);
 
   return (0);
 }

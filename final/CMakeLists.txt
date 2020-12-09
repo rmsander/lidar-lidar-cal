@@ -141,7 +141,7 @@ add_executable(save_octomap_cloud src/save_octomap.cpp)
 
 add_executable(ros_to_pcds src/ros_to_pcds.cpp)
 
-add_executable(build_and_analyze src/build_and_analyze.cpp src/utils.cpp)
+add_executable(build_for_analysis src/build_for_analysis.cpp src/utils.cpp)
 add_executable(analyze_perturbed src/analyze_perturbed.cpp src/utils.cpp)
 add_executable(build_perturbed src/build_perturbed.cpp src/utils.cpp)
 add_executable(analyze_single src/analyze_single.cpp src/utils.cpp)
@@ -162,7 +162,7 @@ target_link_libraries(save_octomap_cloud
 )
 target_link_libraries(save_octomap_cloud ${catkin_LIBRARIES})
 target_link_libraries(ros_to_pcds ${catkin_LIBRARIES})
-target_link_libraries(build_and_analyze ${catkin_LIBRARIES})
+target_link_libraries(build_for_analysis ${catkin_LIBRARIES})
 target_link_libraries(analyze_perturbed ${catkin_LIBRARIES})
 target_link_libraries(build_perturbed ${catkin_LIBRARIES})
 target_link_libraries(analyze_single ${catkin_LIBRARIES})
