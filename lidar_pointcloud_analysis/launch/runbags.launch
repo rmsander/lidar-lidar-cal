@@ -12,14 +12,11 @@
    <node pkg="rosbag" type="play" name="player1" output="screen" args="--clock $(arg path)$(arg file_1).bag $(arg path)$(arg file_2).bag $(arg path)$(arg file_3).bag $(find final)/$(arg odom_file).bag" />
 
    <node pkg="tf2_ros" type="static_transform_publisher" name="arch_main" output="screen" args="-0.02896 0.0267886 -0.40486 -0.00095 0.00230706 -0.38147255 0.9243768 husky4/velodyne arch" />
-   <!--node pkg="tf2_ros" type="static_transform_publisher" name="arch_front" output="screen" args="0.138 -0.01 0.285 -0.0052 0.445058 0.0 arch husky4/velodyne_front" /-->
-    <!-- testing adding error -->
-   <node pkg="tf2_ros" type="static_transform_publisher" name="arch_front" output="screen" args="0.238 -0.01 0.285 -0.0052 0.445058 0.0 arch husky4/velodyne_front" />
+   <node pkg="tf2_ros" type="static_transform_publisher" name="arch_front" output="screen" args="0.138 -0.01 0.285 -0.0052 0.445058 0.0 arch husky4/velodyne_front" />
    <node pkg="tf2_ros" type="static_transform_publisher" name="arch_rear" output="screen" args="-0.47 0 0.21 3.15555 0.428 0.0 arch husky4/velodyne_rear" />
 
    <node pkg="final" type="odom_to_tf.py" name="odom_to_tf" output="screen"/>
 
-<!--
   <node name="octomap_main" pkg="octomap_server" type="octomap_server_node" ns="octo_main">
     <param name="frame_id" value="l1_map"/>
     <param name="filter_ground" value="false"/>
@@ -58,6 +55,5 @@
     <param name="color/a" value="0.8"/>
     <remap from="cloud_in" to="/husky4/velodyne_rear/velodyne_points" />
   </node>
--->
 
 </launch>
