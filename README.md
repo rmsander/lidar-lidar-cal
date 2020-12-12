@@ -207,4 +207,17 @@ The former command displays the clouds separately, and the latter displays them
 on top of each other.
 
 
+Technical Details
+---------------
+If you're interested in any of the technical details behind this framework, 
+please take a look at our **slide deck** in `slide_deck.pdf` and our **paper**
+in `paper.pdf`.
 
+
+Acknowledgements
+---------------
+We would like to thank Professor Luca Carlone and the VNAV staff for support on 
+this project.  Additionally, we thank Benjamin Morrell and Fadhil Ginting for 
+providing data and introducing us to the DARPA Sub-T challenge.  Finally, we 
+would like to thank Mike Schoder and Phil Cotter for collaborating and 
+coordinating with us on this project.
