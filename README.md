@@ -73,10 +73,8 @@ framework below to compute an optimal estimate of the relative transform:
 
 ![Hand-Eye Calibration Problem](readme_figures/hand_eye_calibration.png)
 
-Mathematically, this can be computed by
-
-$$  \hat{\mathbf{T}}^{B}_{A} & = \arg\min_{\mathbf{T}^{B}_{A} \in \textbf{SE}(3)}\frac{1}{N}\sum_{i=1}^{N}\norm{\mathbf{B}_i\mathbf{T}^{B}_{A}\mathbf{A}^{-1}_{i} - \mathbf{T}^{B}_{A}}^{2}_F \\
-    &  = \arg\min_{\mathbf{T}^{B}_{A} \in \textbf{SE}(3)}\frac{1}{N}\sum_{i=1}^{N}\text{tr}(\mathbf{M}_i\mathbf{M}^{T}_i), \; \mathbf{M}_i = \mathbf{B}_i\mathbf{T}^{B}_{A}\mathbf{A}^{-1}_{i} - \mathbf{T}^{B}_{A} $$ 
+Mathematically, this can be computed via the following optimization:
+![Hand-Eye Calibration Problem](readme_figures/opt.png)
 
 ### Running the Analysis
 To run this analysis, run: 
