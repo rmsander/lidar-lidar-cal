@@ -1,5 +1,5 @@
 *.idea*
 *.swp
-*.png
+./calibration_optimization/results/*
 *__pycache__*
 
