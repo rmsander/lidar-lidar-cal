@@ -95,11 +95,45 @@ def check_dir(dir_path):
         print("Directory created: {}".format(dir_path))
 
 
-def average_kfold_rmse(base_path):
+def average_kfold_rmse(base_path, K=10):
     """Function to average the in-sample and out-of-sample RMSE for the optimal
     pose estimates.
 
     Parameters:
-        base_path (str):  String corresponding to the base path
+        base_path (str):  String corresponding to the base path where results are 
+            stored.
+        K (int):  The number of folds considered.
     """
-    pass
+    rmse_results = {}  # Initialize results dict
+    for k in range(K):  # Iterate over folds
+        path = base_path.format(k)
+        with open(path, "r") as res_file:
+            for line in res_file.readlines():
+                pair = line.split(":")
+                rmse_type, val = pair[0], pair[1]
+                if k == 0:  # If first fold, get keys and values, else, just get values
+                    rmse_results[rmse_type] = [float(val)]
+                else:
+                    rmse_results[rmse_type].append(float(val))
+            res_file.close()
+            
+    # Now average the results
+    rmse_avg_results = {}
+    for key, val in rmse_results.items():
+        rmse_avg_results[key] = np.mean(val)
+    
+    # Now save averaged results
+    out_path = os.path.join("results", "cross_validation_folds={}".format(K),
+                            "averaged_rmse_results.pkl")
+    with open(out_path, "wb") as pkl_res:
+        pickle.dump(rmse_avg_results, pkl_res)
+        pkl_res.close()
+    
+    # Now print out the results
+    for key, val in rmse_avg_results.items():
+        print("{}: {:.4e}".format(key, val))
+
+path = os.path.join("results", "cross_validation_folds=5",
+                    "analysis_results_weighted_True", "k={}",
+                    "test_rmse_velodyne_front.txt")
+average_kfold_rmse(path, K=5)
