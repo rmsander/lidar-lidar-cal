@@ -1,23 +1,49 @@
 #!/usr/bin/python3
 
-"""Utility functions for plotting odometry and ICP covariance."""
+"""Utility functions for performing useful analysis functions from our
+lidar-lidar calibration and optimization.  These functions include;
+
+1. Calculating weighted and unweighted RMSE of pose error.
+2. PLotting odometry and errors of the different lidar frames over time.
+3. Calculating and plotting the ICP covariance of the odometry data.
+4. Calculating the variance of the translational and rotational odometry data.
+5. Defining our cost function for our nonlinear manifold optimization problem.
+"""
+
+# Native Python packages
 import os
-import matplotlib.pyplot as plt
 import pickle
+
+# External Python packages
+import matplotlib.pyplot as plt
 from scipy.spatial.transform import Rotation as R
 import autograd.numpy as np
 
 
 def _plot_icp_cov(cov, lidar_type=None, comp="Rotation",
                   coord="x", color="b", results_dir="icp_plots"):
-    """Helper function for plotting ICP functions."""
+    """Helper function for plotting ICP functions.  Called for both rotation
+    and translation components of ICP covariance matrix estimates.
+
+    Parameters:
+        cov (np.array):  Array corresponding to covariance measurements from a
+            given lidar frame from the ICP covariance matrix.
+        lidar_type (str):  String denoting the lidar type.  Should be in the set
+            {'main', 'front', 'rear'}.
+        comp (str):  The component to plot (either 'Rotation' or 'Translation').
+            Defaults to 'Rotation'.
+        coord (str):  The coordinate to plot ('x', 'y', or 'z').  Defaults to 'x'.
+        color (str):  The color to plot the covariance in.  Defaults to 'b' (blue).
+        results_dir (str):  Relative path denoting which directory to store the
+            ICP plots inside.  Defaults to 'icp_plots'.
+    """
     # Set out path
     if not os.path.exists(os.path.join(results_dir, lidar_type)):
         os.mkdir(os.path.join(results_dir, lidar_type))
     out_path = os.path.join(results_dir, lidar_type,
                             "cov_lidar-{}_comp-{}_coord-{}.png".format(lidar_type, comp, coord))
 
-    # Create plot
+    # Create plot for variance with rotation, component, and color
     plt.plot(cov, color=color)
     plt.xlabel("Timesteps (0.1 seconds)")
     plt.ylabel("Covariance, {}, {}-component".format(comp, coord))
@@ -26,27 +52,44 @@ def _plot_icp_cov(cov, lidar_type=None, comp="Rotation",
     plt.clf()
 
 def plot_covs(cov_R, cov_t, lidar_type="Front", clip=False, clip_val=1):
-    """Function for plotting all ICP covariances of a matrix."""
+    """Function for plotting all ICP covariances of a matrix.  Makes repeated
+    calls to the helper function _plot_icp_cov.
+
+    Parameters:
+        cov_R (dict):  Dictionary where each key is the time step number, and
+            each value is a set of 3 diagonal variance measurements; each one
+            is for a different variance of rotation along a given direction.
+        cov_t (dict):  Dictionary where each key is the time step number, and
+            each value is a set of 3 diagonal variance measurements; each one
+            is for a different variance of translation along a given direction.
+        lidar_type (str): String denoting the lidar type.  Should be in the set
+            {'main', 'front', 'rear'}.  This type corresponds to the data type
+            for the lidar frame in question whose ICP covariance values are
+            being plotted.
+    """
+    # Represent covariance dictionaries as lists
     cov_R_as_list = [cov_R[i] for i in range(len(list(cov_R.keys())))]
     cov_t_as_list = [cov_t[i] for i in range(len(list(cov_t.keys())))]
 
-    # Get covariances for rotation
-    if clip:
+    # Set covariances
+    if clip:  # Clip to a certain threshold for plotting
+        # Rotation
         cov_rx = [c[0] if c[0] < clip_val else clip_val for c in cov_R_as_list]
         cov_ry = [c[1] if c[1] < clip_val else clip_val for c in cov_R_as_list]
         cov_rz = [c[2] if c[2] < clip_val else clip_val for c in cov_R_as_list]
 
-        # Get covariances for translation
+        # Translation
         cov_tx = [c[0] if c[0] < clip_val else clip_val for c in cov_t_as_list]
         cov_ty = [c[1] if c[1] < clip_val else clip_val for c in cov_t_as_list]
         cov_tz = [c[2] if c[2] < clip_val else clip_val for c in cov_t_as_list]
 
-    else:
+    else:  # Do not clip values
+        # Rotation
         cov_rx = [c[0] for c in cov_R_as_list]
         cov_ry = [c[1] for c in cov_R_as_list]
         cov_rz = [c[2] for c in cov_R_as_list]
 
-        # Get covariances for translation
+        # Translation
         cov_tx = [c[0] for c in cov_t_as_list]
         cov_ty = [c[1] for c in cov_t_as_list]
         cov_tz = [c[2] for c in cov_t_as_list]
@@ -60,9 +103,9 @@ def plot_covs(cov_R, cov_t, lidar_type="Front", clip=False, clip_val=1):
 
     # Now create plots
     if clip:
-        results_dir = "icp_plots_clipped"
+        results_dir = os.path.join("plots", "icp_plots_clipped")
     else:
-        results_dir = "icp_plots"
+        results_dir = os.path.join("plots", "icp_plots")
 
     # Make sure results directory exists
     if not os.path.exists(results_dir):
@@ -74,9 +117,19 @@ def plot_covs(cov_R, cov_t, lidar_type="Front", clip=False, clip_val=1):
                       coord=coord, color=color, results_dir=results_dir)
 
 
-# Plot odometry of all three lidars
 def plot_all_odom(main_odometry, front_odometry, rear_odometry):
-    """Function for plotting odometry of all three lidar sensors."""
+    """Function for plotting odometry (only the x-component)
+    of all three lidar sensors.  Saves to the file plots/all_odometry.png.
+
+    Parameters:
+        main_odometry (pd.DataFrame):  DataFrame corresponding to odometry data
+            for the main lidar frame.
+        front_odometry (pd.DataFrame):  DataFrame corresponding to odometry data
+            for the front lidar frame.
+        rear_odometry (pd.DataFrame):  DataFrame corresponding to odometry data
+            for the rear lidar frame.
+    """
+    # Create a plt.figure object and add odometry data
     plt.figure()
     plt.plot(main_odometry.x, color="r", label="Odometry, Main")
     plt.plot(front_odometry.x, color="g", label="Odometry, Front")
@@ -85,30 +138,83 @@ def plot_all_odom(main_odometry, front_odometry, rear_odometry):
     plt.xlabel("Timestep (0.1 seconds)")
     plt.ylabel("Odometric Position")
     plt.title("Odometry Over Time of Main, Front, and Rear Lidar Sensors")
-    plt.savefig("all_odometry.png")
+    plt.savefig(os.path.join("plots", "all_odometry.png"))
     plt.show()
     plt.clf()
 
-# individual odometry plotting function
+
 def plot_odometry(odom_df, lidar_type=None, color="b"):
-    """Plotting function for odometry."""
-    plt.plot(odom_df.x, color=color)
+    """Plotting function for visualizing the odometry (only the x-component)
+    of a single lidar sensor.  Saves to the file plots/odometry_{lidar_type}.png.
+
+    Parameters:
+        odom_df (pd.DataFrame):  DataFrame corresponding to odometry data
+            for the lidar frame of interest.
+        lidar_type (str): String denoting the lidar type for the current lidar
+            frame being considered.  This string should be in the set
+            {'main', 'front', 'rear'}.
+    """
+    # Create plot and save it.
+    plt.plot(odom_df.x, color=color, label="x")
     plt.xlabel("Timestep (0.1 seconds)")
     plt.ylabel("Odometric Position")
     plt.title("Odometry Over Time of {} Lidar Sensor".format(lidar_type))
-    plt.savefig("odometry_{}.png".format(lidar_type))
+    plt.savefig(os.path.join("plots", "odometry_{}.png".format(lidar_type)))
     plt.show()
     plt.clf()
 
 def plot_error(err, lidar_type=None, color="b"):
-    """Plotting function for error as a function of optimization iteration."""
+    """Plotting function for error as a function of optimization iteration.
+
+    Parameters:
+        err (np.array):  Array tracking the cost function of the current estimate
+            for x in our nonlinear SE(3) optimization routine.
+        lidar_type (str): String denoting the lidar type for the current lidar
+            frame being considered.  This string should be in the set
+            {'main', 'front', 'rear'}.
+        color (str):  One-character string (e.g. 'b' or 'g') denoting the color
+            the plot will be.
+    """
     plt.plot(err, color=color)
     plt.xlabel("Iteration Number")
     plt.ylabel("Error")
     plt.title("Error vs. Optimization Iteration for Lidar {}".format(lidar_type))
-    plt.savefig("odometry_error_{}.png".format(lidar_type))
+    plt.savefig(os.path.join("plots", "odometry_error_{}.png".format(lidar_type)))
     plt.show()
     plt.clf()
+
+
+def compute_weights_euler(odom_df):
+    """Computes the covariance of the rotation matrix and the standard
+    deviation of translation matrices to weight the samples in the optimization
+    objective.
+
+    Parameters:
+        odom_df (pd.DataFrame):  DataFrame corresponding to odometry data for
+            one of the lidar sensors for which we are interested in calculating
+            weights.
+
+    Returns:
+        cov_t (np.array):  3x3 matrix corresponding to translation covariance.
+        coe_E (np.array):  3x3 matrix corresponding to covariance of the
+            Euler angles from rotation.
+    """
+    # Compute translations and compute covariance over all of them
+    t = odom_df[["dx", "dy", "dz"]].values  # Translation - with shape (N, 3)
+    cov_t = np.cov(t.T)  # Translation with shape (3, N)
+
+    # Extract quaternions from odometric data frame
+    Q = odom_df[["dqx", "dqy", "dqz", "dqw"]].values
+
+    # Convert quaternions to euler angles
+    E = np.zeros((Q.shape[0], 3))  # RPY angles array
+    for i, q in enumerate(Q):  # Iterate over each quaternion
+        E[i] = R.from_quat(q).as_euler('xyz', degrees=False)
+
+    # From here, we need to extract rotations about x,y,z to compute covariance
+    cov_E = np.cov(E.T)
+
+    return cov_t, cov_E
 
 
 def parse_icp_cov(odom_df, type="main", reject_thr=100):
@@ -135,7 +241,7 @@ def parse_icp_cov(odom_df, type="main", reject_thr=100):
         cov_by_frame[i] = np.array(row[1:]).reshape((6, 6))  # Reshape into 6 x 6 covariance matrix
 
     # Save ICP matrices to pkl files
-    fname = "icp_cov_" + type + ".pkl"
+    fname = os.path.join("data", "icp_cov_" + type + ".pkl")
     with open(fname, "wb") as pkl:
         pickle.dump(cov_by_frame, pkl)
         pkl.close()
@@ -156,6 +262,7 @@ def parse_icp_cov(odom_df, type="main", reject_thr=100):
         if rot_cov_max[i] > reject_thr:
             reject[i] = True
 
+    # Iterate over each frame
     for i in range(len(list(cov_by_frame.keys()))):
 
         # ICP covariance matrix
@@ -203,10 +310,11 @@ def cost(X, A, B, r, rho, omega, weighted, t_start=None, t_end=None):
     Returns:
         cost (float):  The total cost computed over the sets of poses.
     """
+    # Compute weights for robust estimates
+    rho_inv = 1./rho
+    omega_inv = 1./omega
 
-    rho = 1./rho
-    omega = 1./omega
-    # Initialize cost
+    # Initialize cost that is incremented with each non-rejected sample
     cost = 0
 
     # Estimates for rotation (R) and translation (t)
@@ -231,10 +339,10 @@ def cost(X, A, B, r, rho, omega, weighted, t_start=None, t_end=None):
         if weighted:  # Compute a weighted estimate
             if not r[ix]:  # If we don't reject the sample, compute cost
                 M = B[ix] @ Tab @ np.linalg.inv(A[ix]) - Tab
-                O = np.array([[omega, 0, 0, 0],
-                              [0, omega, 0, 0],
-                              [0, 0, omega, 0],
-                              [0, 0, 0, rho]])
+                O = np.array([[omega_inv, 0, 0, 0],
+                              [0, omega_inv, 0, 0],
+                              [0, 0, omega_inv, 0],
+                              [0, 0, 0, rho_inv]])
                 cost += np.trace(M @ O @ M.T)
 
         else:  # Compute an unweighted estimate
@@ -383,31 +491,6 @@ def compute_rmse_weighted(X_init, X_final, A, B, rho, omega):
     return rmse_init, rmse_final, rmse_init_R, \
            rmse_init_t, rmse_final_R, rmse_final_t
 
-def compute_weights_euler(odom_df, type="main"):
-    """Computes the covariance of the rotation matrix and the standard
-    deviation of translation matrices to weight the samples in the optimization
-    objective.
-
-    Parameters:
-        R (np.array): 3x3 rotation matrix extra
-    """
-    # Compute translations and compute covariance over all of them
-    print(list(odom_df.columns.values))
-    t = odom_df[["dx", "dy", "dz"]].values  # Translation - with shape (N, 3)
-    cov_t = np.cov(t.T)
-
-    # Extract quaternions from odometric data frame
-    Q = odom_df[["dqx", "dqy", "dqz", "dqw"]].values
-
-    # Convert quaternions to euler angles
-    E = np.zeros((Q.shape[0], 3))  # RPY angles array
-    for i, q in enumerate(Q):  # Iterate over each quaternion
-        E[i] = R.from_quat(q).as_euler('xyz', degrees=False)
-
-    # From here, we need to extract rotations about x,y,z to compute covariance
-    cov_E = np.cov(E.T)
-
-    return cov_t, cov_E
 
 def display_and_save_rmse(rmses, outpath):
     """Function to display different RMSE values from weighted and unweighted
@@ -488,6 +571,8 @@ def extract_variance(cov, mode="avg"):
         cov (np.array): A 3x3 matrix corresponding to a covariance matrix,
             for either the covariance of a set of translations, or over
             rotations given by a vector of Euler angles.
+        mode (str):  Mode determining which variance value to extract.  Choices:
+            {'avg', 'max', 'min'}.
 
     Returns:
         var (float):  Float value corresponding to the variance used for
@@ -496,8 +581,11 @@ def extract_variance(cov, mode="avg"):
     if mode == "avg":  # Average diagonal elements
         return np.trace(cov) / cov.shape[0]
 
-    elif mode == "max":  # Take maximum over diagonal elements
+    elif mode == "max":  # Take maximum over diagonal elements (variance values)
         return max([cov[0, 0], cov[1, 1], cov[2, 2]])
 
-    else:
+    elif mode == "min":  # Take minimum over diagonal elements (variance values)
+        return min([cov[0, 0], cov[1, 1], cov[2, 2]])
+
+    else:  # No valid options selected
         print("Invalid mode specified.  Please choose from {avg, max}.")

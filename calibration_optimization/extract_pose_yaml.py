@@ -1,30 +1,36 @@
 #!/usr/bin/python3
 
-"""Script for finding relative pose between velodyne and the rest of the other sensors."""
+"""Functions and script for finding relative pose between velodyne
+and the rest of the other sensors.  These relative transforms are saved for
+initial guesses for the optimization carried out in analysis.py."""
 
 # Native python imports
 import yaml
 import os
 import pickle
 
-# NumPy
+# External packages
 import numpy as np
-
 from scipy.spatial.transform import Rotation as R
 
 def save_transforms(f, t):
-    """Function to save relative transforms to file using pickle."""
+    """Function to save relative transforms to file using pickle.
 
+    Parameters:
+        f (string):  String corresponding to the name of the file to be saved
+            for the transforms.
+        t (np.array): A 4x4 matrix corresponding to a pose estimate beteen two
+            lidars that we save to file.
+    """
     # Create output directory if it doesn't already exist
     if not os.path.exists("relative_transforms"):
         os.mkdir("relative_transforms")
 
     # Write transforms to pkl file
-    out_path = os.path.join("relative_transforms", f)
-    with open(out_path, "wb") as pkl:
+    with open(f, "wb") as pkl:
         pickle.dump(t, pkl)
         pkl.close()
-        print("Relative transforms saved to: {}".format(out_path))
+        print("Relative transforms saved to: {}".format(f))
 
     # Write transforms to text file
     for sensor, T in t.items():
@@ -32,12 +38,26 @@ def save_transforms(f, t):
         np.savetxt(out_path, T)
 
 def load_transforms(f):
-    """Function to load relative transforms from file."""
-    open_path = os.path.join("relative_transforms", f)
-    with open(open_path, "rb") as pkl:
-        transforms_dict = pickle.load(pkl)
-        pkl.close()
-    return transforms_dict
+    """Function to load relative transforms from file.
+
+    Parameters:
+        f (string):  String corresponding to the name of the file to be saved
+            for the transforms.
+
+    Returns:
+        transforms_dict (dict):  A dictionary to load from file, in which each key
+            corresponds to the name of a relative transform and each value
+            corresponds to a numpy array corresponding to that transform.
+    """
+    open_path = os.path.join(f)
+    if os.path.exists(open_path):  # Check if path exists
+        with open(open_path, "rb") as pkl:
+            transforms_dict = pickle.load(pkl)
+            pkl.close()
+        return transforms_dict
+
+    else:  # Notify user path doesn't exist
+        print("File does not exist")
 
 
 def eul2rot(rpy_dict):
@@ -51,7 +71,10 @@ def eul2rot(rpy_dict):
         R (np.array): A 3 x 3 rotation matrix formed by multiplying the
             yaw x pitch x roll matrices.
     """
+    # Concatenate theta vector
     theta = [rpy_dict['r'], rpy_dict['p'], rpy_dict['y']]
+
+    # Create rotation matrix
     R = np.array([[np.cos(theta[1]) * np.cos(theta[2]),
                    np.sin(theta[0]) * np.sin(theta[1]) * np.cos(
                        theta[2]) - np.sin(theta[2]) * np.cos(theta[0]),
@@ -64,7 +87,6 @@ def eul2rot(rpy_dict):
                        theta[0]) - np.sin(theta[0]) * np.cos(theta[2])],
                   [-np.sin(theta[1]), np.sin(theta[0]) * np.cos(theta[1]),
                    np.cos(theta[0]) * np.cos(theta[1])]])
-
     return R
 
 
@@ -104,8 +126,21 @@ def construct_pose(R, t):
 
 
 def construct_inv_pose(T):
-    """Given a pose T, constructs an inverse pose T^{-1}."""
+    """Given a pose T, constructs an inverse pose T^{-1}.
 
+    Parameters:
+        T (np.array):  A 4x4 matrix corresponding to the pose we would like to
+            invert.  The upper 3x3 block of this matrix corresponds to the
+            rotation, and the last column corresponds to the translation vector
+            with homogeneous coordinates.
+
+    Returns:
+        T_inv (np.array):  A pose corresponding to the inverted pose of the input.
+            For instance, if we have T^{A}_{B}, then T_inv = T^{B}_{A}.  The
+            upper 3x3 block of this matrix corresponds to the inverted rotation,
+            and the last column corresponds to the inverted rotation multiplied
+            by translation vector with homogeneous coordinates.
+    """
     # Get rotation matrix and translation vector
     R = T[:3, :3]  # 3 x 3 upper block
     t = T[:3, 3]  # 3 x 1 upper right vector
@@ -120,8 +155,10 @@ def construct_inv_pose(T):
 
 
 def main():
+    """Main function for extracting poses from the husky sensor."""
     # Open yaml file for parsing
-    with open('husky4_sensors.yaml') as f:
+    husky_sensor_fpath = os.path.join('data', 'husky4_sensors.yaml')
+    with open(husky_sensor_fpath, "r") as f:
         my_dict = yaml.safe_load(f)  # Dump into Python dictionary
         f.close()
 
@@ -137,12 +174,11 @@ def main():
 
     # Get items from dictionary
     for _, value in my_dict.items():
-        # Get values
-        sensor = value['name']
-        translation = get_translation(value['position'])
-        rpy = value['orientation']
-        rotation_matrix = eul2rot(rpy)
-        pose = construct_pose(rotation_matrix, translation)
+        sensor = value['name']  # Get sensor name
+        translation = get_translation(value['position'])  # Position vector
+        rpy = value['orientation']  # Rotation angles as rpy
+        rotation_matrix = eul2rot(rpy)  # 3x3 Rotation matrix
+        pose = construct_pose(rotation_matrix, translation)  # 4x4 pose matrix
 
         # Add items to arrays
         sensors.append(sensor)
@@ -163,41 +199,38 @@ def main():
         print("ROTATION MATRICES: \n {} \n".format(rotation_matrix))
         print("POSE: \n {} \n".format(pose))
 
-        inverse_mat = np.linalg.inv(rotation_matrix)
-        inverse_trans = -inverse_mat @ translation
-        rotation_inv = R.from_matrix(inverse_mat)
-        inverse_quat = rotation_inv.as_quat()
+        inverse_mat = np.linalg.inv(rotation_matrix)  # Inverse rotation matrix
+        inverse_trans = -inverse_mat @ translation  # Inverse translation
+        rotation_inv = R.from_matrix(inverse_mat)  # Rotation matrix inverse
+        inverse_quat = rotation_inv.as_quat()  # Inverse quaternion
         print("INVERSE QUATERNION: {} \n".format(inverse_quat))
         print("INVERSE TRANSLATION: {} \n".format(inverse_trans))
 
     # Now, we need to find transforms relative to velodyne
     velodyne_pose = pose_sensor_dict['velodyne']  # Pose of velodyne w.r.t. world
     inv_velodyne_pose = construct_inv_pose(velodyne_pose)
-    print("INV CHECK: {}".format(velodyne_pose @ inv_velodyne_pose))
+    print("INV CHECK: {}".format(velodyne_pose @ inv_velodyne_pose))  # Should be 4x4 identity matrix
     assert (abs(np.linalg.det(inv_velodyne_pose @ velodyne_pose) - 1.0) < 1e-1)
 
     # Now we can apply transformation to the rest of the poses
     transformed_pose_sensor_dict = {}
 
-    for sensor, pose in pose_sensor_dict.items():
+    for sensor, pose in pose_sensor_dict.items():  # Iterate jointly over sensors and poses
         transformed_pose = inv_velodyne_pose @ pose
         transformed_pose_sensor_dict[sensor] = transformed_pose
         print("\n SENSOR: {} \n"
               "T_{}^velodyne: \n{} \n".format(sensor, sensor, transformed_pose))
         print("DET: {}".format(np.linalg.det(transformed_pose_sensor_dict[sensor])))
 
-    # As a sanity check, compute front-to-rear
+    # As a sanity check, directly compute front-to-rear transformation
     velodyne_front_pose = pose_sensor_dict['velodyne_front']
     velodyne_rear_pose = pose_sensor_dict['velodyne_rear']
     inv_velodyne_front_pose = construct_inv_pose(velodyne_front_pose)
     transformed_pose_sensor_dict["direct_front_rear"] = inv_velodyne_front_pose @ velodyne_rear_pose
 
     # Save relative transforms to file
-    out_file = "relative_transforms.pkl"
+    out_file = os.path.join('data', 'relative_transforms.pkl')
     save_transforms(out_file, transformed_pose_sensor_dict)
-
-
-
 
 
 if __name__ == '__main__':

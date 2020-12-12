@@ -56,12 +56,21 @@ quaternions, and turning the dataframes into lists of relative poses.
 Relative Pose Estimation and Analysis
 ===================
 
-To estimate relative poses between the lidar frames, we use `pymanopt` for
+To estimate optimal relative poses between the lidar frames, we use `python` and `pymanopt` for
 running iterative gradient-based optimizations to estimate relative pose
-transformations that minimize the distance to the observed pose transformations.  
+transformations that minimize the distance to the observed pose transformations.
 
+#### Installation
+To install all Python dependencies, you can so with either `conda`  or `pip`:
+
+* **Conda**: `conda env create -f python_env/environment.yml`
+* **Pip**: `pip install -r python_env/requirements.txt`
+
+#### Running
 To run this analysis, run: 
 ```
+conda activate darpa_subt  // If using conda environment - else ignore this command 
+cd calibration_optimization
 python3 analysis.py --weighted --use_xval --reject_threshold 100 --kfolds 10
 ```
 Where the command-line parameters are given by:
@@ -87,29 +96,31 @@ initial guess given by the configuration file `husky4_sensors.yaml`, from which
 we have extracted relative pose transformations between frames.
 
 2. Save the final estimates of these relative pose transformations, represented
-as 4 x 4 matrices, to the directory `final_estimates_unweighted_{True, False}`,
+as 4 x 4 matrices, to the directory `calibration_optimization/results/final_estimates_unweighted_{True, False}`,
 where the suffix of this directory depends on whether you use weighted estimates
 to optimize the system (a flag in `analysis.py`).
 
 3. Compute the Root Mean Squared Error (RMSE) of the relative (i) pose
 transformation, (ii) rotation, and (iii) translation.  This is carried out for
 both the initial and final estimates.  These results for each pairwise
-combination of sensors can be found under `analysis_results_unweighted_{True,
+combination of sensors can be found under `calibration_optimization/results/analysis_results_unweighted_{True,
 False}`, again depending on whether or not the samples are weighted during
 training.
 
-4. Generate plots of the odometry for all three sensors.
+4. Generate plots of the odometry for all three sensors.  These plots are saved to 
+`calibration_optimization/plots/`.
 
 5. Generate plots of the ICP covariance diagonal elements over time for each
-sensor.  These are saved in `icp_plots/` (or `icp_plots_clipped`), if the
+sensor.  These are saved in `calibration_optimization/plots/icp_plots/` 
+(or `calibration_optimization/plots/icp_plots_clipped`), if the
 maximum value is clipped.
 
 6. If cross-validation is enabled, the results will be stored in a new (or
-existing) directory given by `./cross_validation_folds=K`, where `K` is the
+existing) directory given by `calibration_optimization/results/cross_validation_folds=K`, where `K` is the
 number of folds.
 
 Utility functions for running the script in `analysis.py` can be found in
-`analysis_utils.py`.
+`calibration_optimization/analysis_utils.py`.
 
 Point Cloud Validation
 ======================
@@ -158,7 +169,7 @@ The resulting evaluation of point cloud error is performed by the next utility.
 
 analyze\_perturbed
 ------------------
-See above
+See above for documentation on this file.
 
 
 

@@ -9,6 +9,7 @@ import pickle
 # NumPy
 import numpy as np
 
+
 def load_pkl(f):
     """Loads a pkl file containing a serialized dictionary from memory.
 
@@ -25,10 +26,16 @@ def load_pkl(f):
 
     return pkl_dict
 
+
 def save_to_txt(pkl_file):
     """Converts a pkl file two text files - one for rotation estimates, and the
-    other for translation estimates."""
+    other for translation estimates.
 
+    Parameters:
+        pkl_file (str):  String corresponding to the filepath of the pkl file
+            containing the estimates of rotation and translation for each
+            optimization step.
+    """
     # Load data from pkl file
     pkl_dict = load_pkl(pkl_file)
     max_iter = max(list(pkl_dict.keys()))
@@ -37,29 +44,34 @@ def save_to_txt(pkl_file):
     X_rot = np.array([pkl_dict[i][0] for i in range(1, max_iter + 1)])
     X_trans = np.array([pkl_dict[i][1] for i in range(1, max_iter + 1)])
 
-
     # Save translation and rotation
     out_fname = pkl_file.split(".")[0] + "_{}" + ".txt"
-    #np.savetxt(out_fname.format("R"), X_rot)
-    #np.savetxt(out_fname.format("t"), X_trans)
 
+    # Save rotation estimates from each optimization step to a text file
     with open(out_fname.format("R"), 'w') as R_txt_file:
         for i in range(0, max_iter):
             R_txt_file.write(str(X_rot[i]))
             R_txt_file.write("\n")
 
+    # Save translation estimates from each optimization step to a text file
     with open(out_fname.format("t"), 'w') as t_txt_file:
         for i in range(0, max_iter):
             t_txt_file.write(str(X_trans[i]))
             t_txt_file.write("\n")
 
-def convert_to_txt():
-    """Function to convert pickle files with incremental estimates to txt files."""
+
+def convert_to_txt(estimates_dir):
+    """Function to convert pickle files with incremental estimates to txt files.
+
+    Parameters:
+        estimates_dir (str):  String corresponding to the name of the directory
+            where estimates are stored.
+    """
     try:
         # Take paths from pkl
-        path_main_front = os.path.join("analysis_results", "estimates_main_front.pkl")
-        path_main_rear = os.path.join("analysis_results", "estimates_main_rear.pkl")
-        path_front_rear = os.path.join("analysis_results", "estimates_front_rear.pkl")
+        path_main_front = os.path.join(estimates_dir, "estimates_main_front.pkl")
+        path_main_rear = os.path.join(estimates_dir, "estimates_main_rear.pkl")
+        path_front_rear = os.path.join(estimates_dir, "estimates_front_rear.pkl")
 
         # Save them to text path
         save_to_txt(path_main_front)
@@ -68,6 +80,7 @@ def convert_to_txt():
 
     except:
         print("PATH NOT FOUND")
+
 
 def check_dir(dir_path):
     """Function to check whether a given input path is a valid directory.
@@ -82,3 +95,11 @@ def check_dir(dir_path):
         print("Directory created: {}".format(dir_path))
 
 
+def average_kfold_rmse(base_path):
+    """Function to average the in-sample and out-of-sample RMSE for the optimal
+    pose estimates.
+
+    Parameters:
+        base_path (str):  String corresponding to the base path
+    """
+    pass
