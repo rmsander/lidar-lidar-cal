@@ -1,6 +1,9 @@
 Lidar Calibration Exploratory Tools
 ===================================
 
+This repository contains tools for lidar calibration via a hand-eye framework,
+ as well as tools for building and visualizing calibrated point clouds.
+
 Installation
 ============
 
@@ -32,7 +35,7 @@ the significance of this covariance.
 analysis.py
 -----------
 Formulates and solves an optimization problem to find the maximum likelihood
-estimate for the lidar-lidar transform
+estimate for the lidar-lidar transform.
 
 extract\_pose\_yaml.py
 ----------------------
@@ -215,9 +218,25 @@ in `paper.pdf`.
 
 
 Acknowledgements
----------------
+----------------
 We would like to thank Professor Luca Carlone and the VNAV staff for support on 
 this project.  Additionally, we thank Benjamin Morrell and Fadhil Ginting for 
 providing data and introducing us to the DARPA Sub-T challenge.  Finally, we 
 would like to thank Mike Schoder and Phil Cotter for collaborating and 
 coordinating with us on this project.
+
+Citation
+--------
+
+If you find this project useful, please consider citing our paper:
+
+```@techreport{wenberg-ray-sander-2020,
+author = {Ryan Sander and Dakota Wenberg and Aaron Ray},
+year = {2020},
+month = {12},
+pages = {},
+title = {Lidar-Lidar Hand-Eye Calibration via Optimization on SE(3)},
+url = {https://github.com/rmsander/lidar-lidar-cal},
+doi = {10.1038/s41586-020-2649-}
+}
+```
