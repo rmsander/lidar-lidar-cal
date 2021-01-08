@@ -25,6 +25,22 @@ necessary because I don't think `libpcl` was part of the distro repo.
 The directory `lidar_pointcloud_analysis` is a ROS package that needs
 to be installed in your catkin workspace.
 
+
+File Overview
+=============
+
+The transform optimization process assumes that the rosbags have already
+been turned into csv files. This can be done with the following command:
+
+```
+rostopic echo -b raw_bag1.bag -p /husky4/lo_frontend/odometry > csv_file.csv
+```
+
+This command must be run once for each bag. As the column names get really
+ugly, the second step is to run `clean_csvs.py` which will make the files
+a little easier to work with. However, not that _you will probably have to
+edit the desired filenames in the python script_.
+
 clean\_csvs.py
 --------------
 Generates csvs for the lidar odometry with sensible header names: `time, x, y,
@@ -138,6 +154,9 @@ Utility functions for running the script in `analysis.py` can be found in
 Point Cloud Validation
 ======================
 
+Currently, the commandline arguments for these scripts may not be readily apparent
+and you may need to look at the source code to understand how to use them. I
+hope to add better documentation about each executable in the future.
 
 Running
 -------
