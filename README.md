@@ -2,11 +2,18 @@ Lidar Calibration Exploratory Tools
 ===================================
 
 This repository contains tools for lidar calibration via a hand-eye framework,
- as well as tools for building and visualizing calibrated point clouds.
+ as well as tools for building and visualizing calibrated point clouds.  Specifically, 
+ these tools include sub-modules for:
+
+1. Computing and estimating relative transformations between different lidar sensors (written in `python`).
+2. Evaluating the quality of these calibration sensors (written in `python` and `c++`).
+3. Plotting and visualizing point clouds (written in `c++` using `pcl` and `octomap`).
+4. Visualizing relative poses, both statically and dynamically (written in `MATLAB`).
 
 Installation
 ============
 
+### Point Cloud Visualization and Evaluation (C++)
 In order to see the cumulative point clouds, you need to install octomap:
 
 ```
@@ -24,6 +31,61 @@ necessary because I don't think `libpcl` was part of the distro repo.
 
 The directory `lidar_pointcloud_analysis` is a ROS package that needs
 to be installed in your catkin workspace.
+
+### Relative Pose Estimation and Analysis (Python)
+To install all Python dependencies, you can so with either `conda`  or `pip`:
+
+* **Conda**: `conda env create -f python_env/environment.yml`
+* **Pip**: `pip install -r python_env/requirements.txt`
+
+### Pose Visualization (MATLAB)
+To visualize resulting poses, please have a working installation of MATLAB.
+
+# Recommended Workflow 
+Though we aim for these modules to be largely standalone and modular, we 
+recommend the following workflow for pre-processing, estimating relative 
+transformations, evaluating point cloud calibration quantity, and visualizing 
+point clouds.  
+
+**Note**: 
+* **Steps 1-4** are for estimating the relative transformation between
+lidar sensors, and performing internal evaluation of these transformations.  
+* **Steps 5-6** are for analyzing and evaluating the quality 
+of these transformations through perturbation analysis and lidar point cloud visualization.
+* **Step 7** is for visualizing the estimated relative transformations between lidar
+sensors using MATLAB.
+
+**Steps**:
+
+1. Convert the `rosbag` datasets into CSVs using the `rostopic echo` command below.
+2. Run `calibration_optimization/clean_csvs.py` to pre-process the dataset and 
+clean the column data.  See this file
+below for instructions on how to run.  If you would like to examine the cross-correlation
+of the odometry measurements over time, you can do so by running 
+`calibration_optimization/timing_analysis.py`
+3. Run `calibration_optimization/extract_yaml.py` to compute initial estimates for 
+relative transformations between the lidar sensors on the Husky robots.  See this file
+below for instructions on how to run.
+4. Run `calibration_optimization/analysis.py`.  If you need to adjust the optimization or evaluation 
+sub-routines, e.g. the cost function or weighting scheme, this can be done by modifying
+the functions under `calibration_optimization/analysis_utils.py`.
+5. To visualize the lidar scans (currently configured for running 3 rosbags at a time), you can do so 
+by running our ROS launch file `lidar_pointcloud_anlaysis/runbags.launch`.
+6. To run further analysis for evaluating point cloud consistency, you can 
+run the following scripts (please make sure you are currently running the previous launch file), all under
+`lidar_pointcloud_analysis/src/`.  See the specific notes for each of these files 
+below under "Point Cloud Validation".
+    * `analyze_perturbed.cpp`
+    * `analyze_single.cpp`
+    * `build_for_analysis.cpp`
+    * `build_perturbed.cpp`
+    * `ros_to_pcds.cpp`
+    * `save_octomap.cpp`
+    * `utils.cpp` 
+7. To visualize the relative poses between the lidar sensors, you can do so using
+`MATLAB_vis/drawtriad.m`.  Please check the `InitandFinalVizUNWEIGHTED.m` and 
+`InitandFinalVizWEIGHTED.m` files to make sure the estimates match the transformations
+being plotted.
 
 
 File Overview
@@ -48,21 +110,42 @@ z, qx, qy, qz, qw`. The pose covariance is represented as `cov_pose_0` through
 `cov_pose_35` in row major order (although we are still a little unclear on
 the significance of this covariance.
 
+**To run** (please make sure you run the `rostopic` command above first): 
+```
+cd calibration_optimization
+python3 clean_csvs.py
+```
+
 analysis.py
 -----------
 Formulates and solves an optimization problem to find the maximum likelihood
-estimate for the lidar-lidar transform.
+estimate for the lidar-lidar transform.  See the section below "Running the Analysis"
+for detailed information on command-line parameters and theory behind our estimation
+approach.
+
+**To Run**: See section below "Running the Analysis".
 
 extract\_pose\_yaml.py
 ----------------------
 Parses the yaml file that stores robot sensor calibration values into
 homogeneous transformation matrices.
 
+**To Run**: 
+```
+cd calibration_optimization
+python3 extract_pose_yaml.py
+```
+
 timing\_analysis.py
 -------------------
 Runs cross-correlation of angular velocity each each lidar frame to find time
 offset between sensors. Based on our preliminary works, there doesn't seem to be
 much of an offset.
+**To Run**: 
+```
+cd calibration_optimization
+python3 timing_analysis.py
+```
 
 relative\_pose\_processing.py
 -----------------------------
@@ -75,15 +158,9 @@ quaternions, and turning the dataframes into lists of relative poses.
 Relative Pose Estimation and Analysis
 ===================
 
-To estimate optimal relative poses between the lidar frames, we use `python` and `pymanopt` for
-running iterative gradient-based optimizations to estimate relative pose
+To estimate optimal relative poses between the lidar frames, we use `python` 
+and `pymanopt` for running iterative gradient-based optimizations over **SE(3)** to estimate relative pose
 transformations that minimize the distance to the observed pose transformations.
-
-### Installation
-To install all Python dependencies, you can so with either `conda`  or `pip`:
-
-* **Conda**: `conda env create -f python_env/environment.yml`
-* **Pip**: `pip install -r python_env/requirements.txt`
 
 ### Hand-Eye Calibration Problem
 This manifold optimization framework solves the problem of estimating the relative 
