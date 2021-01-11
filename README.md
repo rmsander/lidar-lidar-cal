@@ -326,13 +326,14 @@ Citation
 
 If you find this project useful, please consider citing our paper:
 
-```@techreport{wenberg-ray-sander-2020,
+```
+@techreport{wenberg-ray-sander-2020,
 author = {Ryan Sander and Dakota Wenberg and Aaron Ray},
 year = {2020},
 month = {12},
 pages = {},
 title = {Lidar-Lidar Hand-Eye Calibration via Optimization on SE(3)},
 url = {https://github.com/rmsander/lidar-lidar-cal},
-doi = {10.1038/s41586-020-2649-}
+doi = {10.13140/RG.2.2.25464.67840}
 }
 ```
